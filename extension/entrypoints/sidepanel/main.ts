@@ -292,6 +292,84 @@ function addDoneMessage(success: boolean, summary: string, actions: number) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+// --- Streaming Bubble ---
+let streamingBubble: HTMLElement | null = null;
+let streamingBody: HTMLElement | null = null;
+
+function startStreamingBubble() {
+  // If there's already a streaming bubble, finalize it first
+  if (streamingBubble) finalizeStreamingBubble();
+
+  welcomeEl.classList.add('hidden');
+  const div = document.createElement('div');
+  div.className = 'msg streaming';
+
+  const body = document.createElement('div');
+  body.className = 'streaming-body';
+  body.innerHTML = '<span class="streaming-cursor"></span>';
+  div.appendChild(body);
+
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  streamingBubble = div;
+  streamingBody = body;
+}
+
+function appendToStreamingBubble(token: string) {
+  if (!streamingBody) startStreamingBubble();
+
+  // Filter out <think> tags — show thinking content but strip the tags
+  const cleaned = token.replace(/<\/?think>/g, '');
+  if (!cleaned) return;
+
+  // Remove cursor, append text, re-add cursor
+  const cursor = streamingBody!.querySelector('.streaming-cursor');
+  if (cursor) cursor.remove();
+
+  streamingBody!.insertAdjacentText('beforeend', cleaned);
+
+  // Re-add cursor at the end
+  const newCursor = document.createElement('span');
+  newCursor.className = 'streaming-cursor';
+  streamingBody!.appendChild(newCursor);
+
+  // Auto-scroll
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  // Truncate if too long (keep last 500 chars visible)
+  const text = streamingBody!.textContent || '';
+  if (text.length > 600) {
+    const cursor2 = streamingBody!.querySelector('.streaming-cursor');
+    if (cursor2) cursor2.remove();
+    streamingBody!.textContent = '...' + text.slice(-500);
+    const nc = document.createElement('span');
+    nc.className = 'streaming-cursor';
+    streamingBody!.appendChild(nc);
+  }
+}
+
+function finalizeStreamingBubble() {
+  if (!streamingBubble) return;
+
+  // Remove cursor
+  const cursor = streamingBubble.querySelector('.streaming-cursor');
+  if (cursor) cursor.remove();
+
+  // Remove streaming class (stops animation)
+  streamingBubble.classList.remove('streaming');
+  streamingBubble.classList.add('agent');
+
+  // If the bubble is empty or very short, remove it
+  const text = (streamingBody?.textContent || '').trim();
+  if (text.length < 5) {
+    streamingBubble.remove();
+  }
+
+  streamingBubble = null;
+  streamingBody = null;
+}
+
 function setConnectionStatus(status: string) {
   statusIndicator.className = status;
   statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
@@ -411,6 +489,18 @@ chrome.runtime.onMessage.addListener((message) => {
           setWorking(true);
         }
       }
+    }
+
+    else if (msgType === 'server_stream_start') {
+      startStreamingBubble();
+    }
+
+    else if (msgType === 'server_token') {
+      appendToStreamingBubble(data.token || '');
+    }
+
+    else if (msgType === 'server_stream_end') {
+      finalizeStreamingBubble();
     }
 
     else if (msgType === 'server_thinking') {

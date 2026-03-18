@@ -259,6 +259,40 @@ body {
   font-weight: 600;
 }
 
+/* Streaming Bubble (live token output) */
+.msg.streaming {
+  align-self: flex-start;
+  background: var(--surface2);
+  color: var(--text-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius) var(--radius) var(--radius) 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  max-width: 95%;
+  min-height: 24px;
+  animation: msgIn 0.2s ease;
+}
+.streaming-body {
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11.5px;
+}
+.streaming-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  background: var(--accent);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* Thinking Bubble */
 .msg.thinking {
   align-self: flex-start;

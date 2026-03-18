@@ -13,9 +13,11 @@ with the WebSocket via asyncio primitives.
 import asyncio
 import time
 import uuid
+from typing import Any
 
 import structlog
 from fastapi import WebSocket, WebSocketDisconnect
+from langchain_core.callbacks import AsyncCallbackHandler
 from langgraph.types import Command
 from langgraph.errors import GraphInterrupt
 
@@ -32,6 +34,85 @@ from agent_core.server.session import Session, SessionManager
 from agent_core.server.key_vault import key_vault
 
 logger = structlog.get_logger("server.ws_handler")
+
+
+class WebSocketStreamingHandler(AsyncCallbackHandler):
+    """LangChain callback that streams LLM tokens to the WebSocket in real-time."""
+
+    def __init__(self, ws: WebSocket, session_id: str):
+        self.ws = ws
+        self.session_id = session_id
+        self._streaming = False
+        self._buffer = ""
+        self._token_count = 0
+        # Throttle: send every N tokens or every M chars to avoid flooding
+        self._send_interval = 3  # Send every 3 tokens
+        self._current_node = ""
+
+    async def on_llm_start(self, serialized: dict, prompts: Any, **kwargs) -> None:
+        """Called when an LLM call starts."""
+        self._streaming = True
+        self._buffer = ""
+        self._token_count = 0
+        try:
+            await self.ws.send_json({
+                "type": "server_stream_start",
+                "session_id": self.session_id,
+                "timestamp": time.time(),
+            })
+        except Exception:
+            pass
+
+    async def on_llm_new_token(self, token: str, **kwargs) -> None:
+        """Called for each new token from the LLM."""
+        if not self._streaming:
+            return
+
+        self._buffer += token
+        self._token_count += 1
+
+        # Send buffered tokens every N tokens to avoid WS flooding
+        if self._token_count % self._send_interval == 0 and self._buffer:
+            try:
+                await self.ws.send_json({
+                    "type": "server_token",
+                    "token": self._buffer,
+                    "session_id": self.session_id,
+                })
+                self._buffer = ""
+            except Exception:
+                self._streaming = False
+
+    async def on_llm_end(self, response: Any, **kwargs) -> None:
+        """Called when an LLM call ends."""
+        # Flush remaining buffer
+        if self._buffer:
+            try:
+                await self.ws.send_json({
+                    "type": "server_token",
+                    "token": self._buffer,
+                    "session_id": self.session_id,
+                })
+            except Exception:
+                pass
+
+        self._streaming = False
+        self._buffer = ""
+
+        try:
+            await self.ws.send_json({
+                "type": "server_stream_end",
+                "session_id": self.session_id,
+                "total_tokens": self._token_count,
+                "timestamp": time.time(),
+            })
+        except Exception:
+            pass
+
+    async def on_llm_error(self, error: BaseException, **kwargs) -> None:
+        """Called when an LLM call errors."""
+        self._streaming = False
+        self._buffer = ""
 
 
 async def send_msg(ws: WebSocket, msg_type: str, **data) -> None:
@@ -182,9 +263,13 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
         model_name=model_name,
         api_keys=api_keys,
     )
+    # Create streaming callback to push LLM tokens to WebSocket in real-time
+    streaming_handler = WebSocketStreamingHandler(ws, session.session_id)
+
     config = {
         "configurable": {"thread_id": session.thread_id},
         "run_name": f"agent_{session.session_id}",
+        "callbacks": [streaming_handler],
         "metadata": {
             "session_id": session.session_id,
             "goal": goal[:100],

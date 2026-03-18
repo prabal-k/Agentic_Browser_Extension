@@ -374,13 +374,32 @@ async def _dispatch_action(
         # read_page tool sends value="__READ_PAGE__" — extract visible text
         if action.value == "__READ_PAGE__":
             text = await page.evaluate("""() => {
-                // Simple and reliable: use document.body.innerText which
-                // automatically excludes scripts/styles and respects visibility.
-                // Then trim to reasonable size.
-                const fullText = (document.body.innerText || '').trim();
-                // Skip the first ~200 chars (usually nav/header) and get the meat
-                const skipHeader = fullText.length > 500 ? fullText.substring(200) : fullText;
-                return skipHeader.substring(0, 4000);
+                // Try to find the main content area — avoids nav/header/sidebar noise
+                // This is generalized: works on any site with semantic HTML
+                const contentSelectors = [
+                    'main', 'article', '[role="main"]',
+                    '#content', '#main-content', '.content', '.main',
+                    '#readme', '.markdown-body', '.entry-content',
+                ];
+
+                let contentEl = null;
+                for (const sel of contentSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.innerText && el.innerText.trim().length > 50) {
+                        contentEl = el;
+                        break;
+                    }
+                }
+
+                // Use content element if found, otherwise fall back to body
+                const source = contentEl || document.body;
+                const fullText = (source.innerText || '').trim();
+
+                // If we got the body, skip the first chunk (usually nav/header)
+                if (!contentEl && fullText.length > 500) {
+                    return fullText.substring(200, 4200);
+                }
+                return fullText.substring(0, 4000);
             }""")
         elif action.element_id is not None:
             selector = _find_element_selector(page_context, action.element_id)

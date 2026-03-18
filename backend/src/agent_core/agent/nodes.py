@@ -225,19 +225,17 @@ async def analyze_and_plan(state: AgentState) -> dict:
         original_reasoning="Reactive mode — one step at a time",
     )
 
-    # Set initial reasoning context for decide_action
-    reasoning = f"Task: {goal_text}"
+    # Set initial reasoning — just context hints, not the task text itself
+    # (the task text is already passed in the ACTION_DECISION_PROMPT as {goal})
+    reasoning = "First action — start working on the task."
     if target_url:
-        reasoning += f"\nTarget URL found: {target_url}"
+        reasoning = f"Target URL detected: {target_url}"
 
     return {
         "goal": goal,
         "plan": plan,
         "cognitive_status": CognitiveStatus.DECIDING,
         "current_reasoning": reasoning,
-        "messages": [
-            AIMessage(content=f"Task understood. Starting execution.")
-        ],
     }
 
 
@@ -1251,6 +1249,30 @@ async def self_critique_action(state: AgentState) -> dict:
             "current_reasoning": "Maximum iterations reached. Reporting what was found so far.",
         }
 
+    # Safety: no meaningful progress after many actions
+    # If 8+ actions done and no extracted findings, force-terminate
+    if len(action_history) >= 8:
+        has_any_findings = any(
+            isinstance(entry.get("result", {}).get("extracted_data", ""), str)
+            and len(entry.get("result", {}).get("extracted_data", "")) > 50
+            and not entry.get("result", {}).get("extracted_data", "").startswith("data:image")
+            for entry in action_history
+        )
+        if not has_any_findings:
+            logger.info("self_critique_no_progress", msg=f"No findings after {len(action_history)} actions — force-terminating")
+            return {
+                "cognitive_status": CognitiveStatus.COMPLETED,
+                "should_terminate": True,
+            }
+
+    # If 12+ actions total regardless of findings, force-terminate
+    if len(action_history) >= 12:
+        logger.info("self_critique_max_actions", msg=f"Force-terminating after {len(action_history)} actions")
+        return {
+            "cognitive_status": CognitiveStatus.COMPLETED,
+            "should_terminate": True,
+        }
+
     # Detect duplicate/empty extractions: if last 2 extract actions returned same or empty content, force done
     if len(action_history) >= 2:
         last_two = action_history[-2:]
@@ -1269,15 +1291,31 @@ async def self_critique_action(state: AgentState) -> dict:
 
             if both_empty or both_same:
                 reason = "empty results" if both_empty else "same content"
-                logger.info("self_critique_duplicate_detected", msg=f"Last 2 extractions: {reason} — forcing done")
+                logger.info("self_critique_duplicate_detected", msg=f"Last 2 extractions: {reason}")
+
+                # Count total extraction attempts to detect persistent failure
+                extract_count = sum(
+                    1 for e in action_history
+                    if e.get("action", {}).get("action_type") in ("extract_text", "take_screenshot")
+                )
+
+                # After 4+ extraction attempts with no new content, force-terminate
+                # This is a CODE-LEVEL enforcement — not a prompt suggestion
+                if extract_count >= 4:
+                    logger.info("self_critique_force_done", msg=f"Force-terminating after {extract_count} failed extractions")
+                    return {
+                        "cognitive_status": CognitiveStatus.COMPLETED,
+                        "should_terminate": True,
+                    }
+
+                # First time: give LLM one more chance with a strong hint
                 return {
                     "cognitive_status": CognitiveStatus.DECIDING,
                     "retry_context": RetryContext(),
                     "current_reasoning": (
                         f"EXTRACTION FAILED: Last 2 read_page calls returned {reason}. "
-                        "The page content could not be read (may be a JavaScript-heavy site). "
-                        "You MUST call done() NOW — either report what you know from the page URL and elements, "
-                        "or try navigating to a DIFFERENT website to find the information."
+                        "Try scrolling down first, then read_page again. "
+                        "Or call done() with what you already know from the page URL and element labels."
                     ),
                 }
 
