@@ -1,0 +1,1122 @@
+{
+  "url": "https://news.ycombinator.com/",
+  "title": "Hacker News",
+  "meta_description": "",
+  "page_text_summary": "Hacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n1.\t\n\tCanada's bill C-22 mandates mass metadata surveillance (michaelgeist.ca)\n\t623 points by opengrass 10 hours ago | hide | 182\u00a0comments\n\n2.\t\n\tThe 49MB web page (thatshubham.com)\n\t479 points by kermatt 12 hours ago | hide | 224\u00a0comments\n\n3.\t\n\tHow I write software with LLMs (stavros.io)\n\t126 points by indigodaddy 6 hours ago | hide | 63\u00a0comments\n\n4.\t\n\tChrome DevTools MCP (2025) (chrome.com)\n\t450 points by xnx 12 hours ago | h",
+  "elements": [
+    {
+      "element_id": 1,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "https://news.ycombinator.com"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 105.0,
+        "y": 10.0,
+        "width": 20.0,
+        "height": 20.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 2,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Hacker News",
+      "attributes": {
+        "href": "news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 130.0,
+        "y": 12.0,
+        "width": 98.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 3,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "new",
+      "attributes": {
+        "href": "newest"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 233.0,
+        "y": 12.0,
+        "width": 27.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 4,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "past",
+      "attributes": {
+        "href": "front"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 276.0,
+        "y": 12.0,
+        "width": 29.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 5,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "comments",
+      "attributes": {
+        "href": "newcomments"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 319.0,
+        "y": 12.0,
+        "width": 70.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 6,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "ask",
+      "attributes": {
+        "href": "ask"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 404.0,
+        "y": 12.0,
+        "width": 23.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 7,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "show",
+      "attributes": {
+        "href": "show"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 443.0,
+        "y": 12.0,
+        "width": 34.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 8,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "jobs",
+      "attributes": {
+        "href": "jobs"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 493.0,
+        "y": 12.0,
+        "width": 28.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 9,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "submit",
+      "attributes": {
+        "href": "submit"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 536.0,
+        "y": 12.0,
+        "width": 46.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 10,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "login",
+      "attributes": {
+        "href": "login?goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 1139.0,
+        "y": 12.0,
+        "width": 32.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 11,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "vote?id=47392084&how=up&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 125.0,
+        "y": 45.0,
+        "width": 14.0,
+        "height": 10.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a#up_47392084",
+      "xpath": ""
+    },
+    {
+      "element_id": 12,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Canada's bill C-22 mandates mass metadata surveillance",
+      "attributes": {
+        "href": "https://www.michaelgeist.ca/2026/03/a-tale-of-two-bills-lawful-access-returns-with-changes-to-warrantless-access-but-dangerous-backdoor-surveillance-risks-remains/"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 139.0,
+        "y": 44.0,
+        "width": 384.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 13,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "michaelgeist.ca",
+      "attributes": {
+        "href": "from?site=michaelgeist.ca"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 531.0,
+        "y": 46.0,
+        "width": 83.0,
+        "height": 13.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 14,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "opengrass",
+      "attributes": {
+        "href": "user?id=opengrass"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 206.0,
+        "y": 61.0,
+        "width": 48.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a.hnuser",
+      "xpath": ""
+    },
+    {
+      "element_id": 15,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "10 hours ago",
+      "attributes": {
+        "href": "item?id=47392084"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 257.0,
+        "y": 61.0,
+        "width": 62.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 16,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "hide",
+      "attributes": {
+        "href": "hide?id=47392084&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 330.0,
+        "y": 61.0,
+        "width": 20.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 17,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "182\u00a0comments",
+      "attributes": {
+        "href": "item?id=47392084"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 361.0,
+        "y": 61.0,
+        "width": 70.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 18,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "vote?id=47390945&how=up&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 125.0,
+        "y": 80.0,
+        "width": 14.0,
+        "height": 10.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a#up_47390945",
+      "xpath": ""
+    },
+    {
+      "element_id": 19,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "The 49MB web page",
+      "attributes": {
+        "href": "https://thatshubham.com/blog/news-audit"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 139.0,
+        "y": 79.0,
+        "width": 136.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 20,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "thatshubham.com",
+      "attributes": {
+        "href": "from?site=thatshubham.com"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 283.0,
+        "y": 81.0,
+        "width": 97.0,
+        "height": 13.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 21,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "kermatt",
+      "attributes": {
+        "href": "user?id=kermatt"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 206.0,
+        "y": 96.0,
+        "width": 37.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a.hnuser",
+      "xpath": ""
+    },
+    {
+      "element_id": 22,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "12 hours ago",
+      "attributes": {
+        "href": "item?id=47390945"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 246.0,
+        "y": 96.0,
+        "width": 62.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 23,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "hide",
+      "attributes": {
+        "href": "hide?id=47390945&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 319.0,
+        "y": 96.0,
+        "width": 20.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 24,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "224\u00a0comments",
+      "attributes": {
+        "href": "item?id=47390945"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 350.0,
+        "y": 96.0,
+        "width": 70.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 25,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "vote?id=47394022&how=up&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 125.0,
+        "y": 115.0,
+        "width": 14.0,
+        "height": 10.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a#up_47394022",
+      "xpath": ""
+    },
+    {
+      "element_id": 26,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "How I write software with LLMs",
+      "attributes": {
+        "href": "https://www.stavros.io/posts/how-i-write-software-with-llms/"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 139.0,
+        "y": 114.0,
+        "width": 210.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 27,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "stavros.io",
+      "attributes": {
+        "href": "from?site=stavros.io"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 357.0,
+        "y": 116.0,
+        "width": 52.0,
+        "height": 13.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 28,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "indigodaddy",
+      "attributes": {
+        "href": "user?id=indigodaddy"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 206.0,
+        "y": 131.0,
+        "width": 57.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a.hnuser",
+      "xpath": ""
+    },
+    {
+      "element_id": 29,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "6 hours ago",
+      "attributes": {
+        "href": "item?id=47394022"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 266.0,
+        "y": 131.0,
+        "width": 56.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 30,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "hide",
+      "attributes": {
+        "href": "hide?id=47394022&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 333.0,
+        "y": 131.0,
+        "width": 20.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 31,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "63\u00a0comments",
+      "attributes": {
+        "href": "item?id=47394022"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 364.0,
+        "y": 131.0,
+        "width": 64.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 32,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "vote?id=47390817&how=up&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 125.0,
+        "y": 150.0,
+        "width": 14.0,
+        "height": 10.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a#up_47390817",
+      "xpath": ""
+    },
+    {
+      "element_id": 33,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Chrome DevTools MCP (2025)",
+      "attributes": {
+        "href": "https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 139.0,
+        "y": 149.0,
+        "width": 201.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 34,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "chrome.com",
+      "attributes": {
+        "href": "from?site=chrome.com"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 348.0,
+        "y": 151.0,
+        "width": 66.0,
+        "height": 13.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 35,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "xnx",
+      "attributes": {
+        "href": "user?id=xnx"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 206.0,
+        "y": 166.0,
+        "width": 17.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a.hnuser",
+      "xpath": ""
+    },
+    {
+      "element_id": 36,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "12 hours ago",
+      "attributes": {
+        "href": "item?id=47390817"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 226.0,
+        "y": 166.0,
+        "width": 62.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 37,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "hide",
+      "attributes": {
+        "href": "hide?id=47390817&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 299.0,
+        "y": 166.0,
+        "width": 20.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 38,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "189\u00a0comments",
+      "attributes": {
+        "href": "item?id=47390817"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 330.0,
+        "y": 166.0,
+        "width": 70.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 39,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "vote?id=47350016&how=up&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 125.0,
+        "y": 185.0,
+        "width": 14.0,
+        "height": 10.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a#up_47350016",
+      "xpath": ""
+    },
+    {
+      "element_id": 40,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Electric motor scaling laws and inertia in robot actuators",
+      "attributes": {
+        "href": "https://robot-daycare.com/posts/actuation_series_1/"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 139.0,
+        "y": 184.0,
+        "width": 379.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 41,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "robot-daycare.com",
+      "attributes": {
+        "href": "from?site=robot-daycare.com"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 526.0,
+        "y": 186.0,
+        "width": 101.0,
+        "height": 13.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 42,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "o4c",
+      "attributes": {
+        "href": "user?id=o4c"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 200.0,
+        "y": 201.0,
+        "width": 16.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a.hnuser",
+      "xpath": ""
+    },
+    {
+      "element_id": 43,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "4 hours ago",
+      "attributes": {
+        "href": "item?id=47350016"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 220.0,
+        "y": 201.0,
+        "width": 56.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 44,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "hide",
+      "attributes": {
+        "href": "hide?id=47350016&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 287.0,
+        "y": 201.0,
+        "width": 20.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 45,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "11\u00a0comments",
+      "attributes": {
+        "href": "item?id=47350016"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 317.0,
+        "y": 201.0,
+        "width": 64.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 46,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "vote?id=47343902&how=up&goto=news"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 125.0,
+        "y": 220.0,
+        "width": 14.0,
+        "height": 10.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a#up_47343902",
+      "xpath": ""
+    },
+    {
+      "element_id": 47,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "What every computer scientist should know about floating-point arithmetic (1991) [pdf]",
+      "attributes": {
+        "href": "https://www.itu.dk/~sestoft/bachelor/IEEE754_article.pdf"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 139.0,
+        "y": 219.0,
+        "width": 593.0,
+        "height": 16.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 48,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "itu.dk",
+      "attributes": {
+        "href": "from?site=itu.dk"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 740.0,
+        "y": 221.0,
+        "width": 31.0,
+        "height": 13.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 49,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "jbarrow",
+      "attributes": {
+        "href": "user?id=jbarrow"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 200.0,
+        "y": 236.0,
+        "width": 36.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a.hnuser",
+      "xpath": ""
+    },
+    {
+      "element_id": 50,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "5 hours ago",
+      "attributes": {
+        "href": "item?id=47343902"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": {
+        "x": 239.0,
+        "y": 236.0,
+        "width": 56.0,
+        "height": 11.0
+      },
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    }
+  ],
+  "forms": [
+    {
+      "name": "unnamed",
+      "action": "//hn.algolia.com/",
+      "method": "GET",
+      "field_ids": []
+    }
+  ],
+  "navigation": [],
+  "viewport_width": 1280,
+  "viewport_height": 720,
+  "scroll_position": 0.0,
+  "has_more_content_below": false,
+  "timestamp": 1773648082.8728118
+}

@@ -1,0 +1,11 @@
+{
+    "name": "wikipedia_navigate",
+    "description": "Navigate Wikipedia article sections",
+    "goal": "Find and read the History section of the Artificial Intelligence article",
+    "snapshot": "wikipedia_article",
+    "expected_actions": [
+        {"action_type": "click", "element_id": 11, "description": "Click History in table of contents"}
+    ],
+    "expected_step_count": 1,
+    "difficulty": "simple"
+}

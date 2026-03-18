@@ -1,0 +1,12 @@
+{
+    "name": "wikipedia_search",
+    "description": "Search Wikipedia for a new topic from the current article",
+    "goal": "Search Wikipedia for 'machine learning'",
+    "snapshot": "wikipedia_article",
+    "expected_actions": [
+        {"action_type": "clear_and_type", "element_id": 1, "description": "Type search query"},
+        {"action_type": "click", "element_id": 2, "description": "Click search button"}
+    ],
+    "expected_step_count": 2,
+    "difficulty": "simple"
+}

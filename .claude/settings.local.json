@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/praba/Desktop/Prabal/Agentic_Browser_Extension/backend\" && python -m venv venv && echo \"venv created\")",
+      "Bash(cd \"C:/Users/praba/Desktop/Prabal/Agentic_Browser_Extension/backend\" && ./venv/Scripts/python -m pytest tests/test_schemas.py -v 2>&1)",
+      "Bash(cd C:/Users/praba/Desktop/Prabal/Agentic_Browser_Extension/backend && python -m agent_core.test_harness.dom_capture https://news.ycombinator.com --output tests/fixtures/dom_snapshots/hackernews.json 2>&1)",
+      "Bash(cd C:/Users/praba/Desktop/Prabal/Agentic_Browser_Extension/backend && python test_ollama_live.py 2>&1)",
+      "Bash(cd C:/Users/praba/Desktop/Prabal/Agentic_Browser_Extension/backend && python -m pytest tests/ -v --tb=short 2>&1 | tail -30)",
+      "Bash(cd:*)",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_file_upload",
+      "mcp__playwright__browser_type"
+    ]
+  }
+}

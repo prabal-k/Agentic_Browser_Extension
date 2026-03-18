@@ -1,0 +1,12 @@
+{
+    "name": "google_search",
+    "description": "Search Google for a query",
+    "goal": "Search for 'best pizza restaurants near me'",
+    "snapshot": "google_search",
+    "expected_actions": [
+        {"action_type": "type_text", "element_id": 1, "description": "Type search query"},
+        {"action_type": "click", "element_id": 2, "description": "Click search button"}
+    ],
+    "expected_step_count": 2,
+    "difficulty": "simple"
+}

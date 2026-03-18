@@ -1,0 +1,2347 @@
+{
+  "url": "https://www.imdb.com/chart/top/",
+  "title": "IMDb Top 250 movies",
+  "meta_description": "As rated by regular IMDb voters.",
+  "page_text_summary": "Menu Movies Release calendar Top 250 movies Most popular movies Browse movies by genre Top box office Showtimes & tickets Movie news India movie spotlight TV shows What's on TV & streaming Top 250 TV shows Most popular TV shows Browse TV shows by genre TV news Watch What to watch Latest trailers IMDb Originals IMDb Picks IMDb Spotlight Family entertainment guide IMDb Podcasts Awards & events Oscars SXSW Film Festival Women's History Month Awards Season Guide STARmeter Awards Awards Central Festi",
+  "elements": [
+    {
+      "element_id": 1,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "aria-label": "Home",
+        "href": "/?ref_=chttp_nv_home"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "a#home_img_holder",
+      "xpath": ""
+    },
+    {
+      "element_id": 2,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "href": "/?ref_=chttp_nv_menu_home"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "a",
+      "xpath": ""
+    },
+    {
+      "element_id": 3,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Release calendar",
+      "attributes": {
+        "aria-label": "Go to Release calendar",
+        "href": "/calendar/?ref_=chttp_nv_menu",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "a.ipc-list__item.sc-e3c3c540-0",
+      "xpath": ""
+    },
+    {
+      "element_id": 4,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Partially supported",
+      "attributes": {
+        "aria-label": "Learn more about partially supported languages.",
+        "href": "https://help.imdb.com/article/issues/G6TCMBKAAR5G95EN?ref_=loc_nav_sel_hlp",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "a.ipc-list__item.sc-a34213b7-0",
+      "xpath": ""
+    },
+    {
+      "element_id": 5,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "aria-label": "Go To IMDb Pro",
+        "href": "https://pro.imdb.com/login/ap?u=/login/lwa&imdbPageAction=signUp&rf=cons_nb_hm&ref_=cons_nb_hm"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "a.ipc-btn.ipc-btn--single-padding",
+      "xpath": ""
+    },
+    {
+      "element_id": 6,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Use app",
+      "attributes": {
+        "aria-label": "Use app",
+        "href": "https://slyb.app.link/vtz1COZnXAb"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "a.ipc-btn.ipc-btn--half-padding",
+      "xpath": ""
+    },
+    {
+      "element_id": 7,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "aria-label": "View title page for The Shawshank Redemption",
+        "href": "/title/tt0111161/?ref_=chttp_i_1"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "a.ipc-lockup-overlay.ipc-focusable",
+      "xpath": ""
+    },
+    {
+      "element_id": 8,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "The Shawshank Redemption",
+      "attributes": {
+        "href": "/title/tt0111161/?ref_=chttp_t_1"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "a.ipc-title-link-wrapper",
+      "xpath": ""
+    },
+    {
+      "element_id": 9,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Learn more about how list ranking is determined.",
+      "attributes": {
+        "href": "https://help.imdb.com/article/imdb/featured-content/why-doesn-t-a-title-with-the-average-user-vote-of-9-4-appear-in-your-top-250-movies-or-tv-list/GTU67Q5QQ8W53RJT?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=1a264"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "a.ipc-link.ipc-link--base",
+      "xpath": ""
+    },
+    {
+      "element_id": 10,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Get the IMDb App",
+      "attributes": {
+        "href": "https://slyb.app.link/SKdyQ6A449"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "a.ipc-btn.ipc-btn--double-padding",
+      "xpath": ""
+    },
+    {
+      "element_id": 11,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "aria-label": "TikTok",
+        "href": "https://www.tiktok.com/@imdb",
+        "title": "TikTok"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "a.ipc-icon-button.ipc-icon-button--baseAlt",
+      "xpath": ""
+    },
+    {
+      "element_id": 12,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Help",
+      "attributes": {
+        "href": "https://help.imdb.com/imdb"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "a.ipc-link.ipc-link--baseAlt",
+      "xpath": ""
+    },
+    {
+      "element_id": 13,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "",
+      "attributes": {
+        "aria-label": "Your Ads Privacy Choices",
+        "href": "/privacy/redirect/?ref_=chttp_ftr"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "a.sc-698095bb-1.gFqPXW",
+      "xpath": ""
+    },
+    {
+      "element_id": 14,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": "Submit search",
+        "type": "submit"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "button#suggestion-search-button",
+      "xpath": ""
+    },
+    {
+      "element_id": 15,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": "Share on social media",
+        "title": "Share on social media"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button.ipc-icon-button.sharemenu-iconbutton",
+      "xpath": ""
+    },
+    {
+      "element_id": 16,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": " Detailed view",
+        "title": " Detailed view"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button#list-view-option-detailed",
+      "xpath": ""
+    },
+    {
+      "element_id": 17,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": " Grid view",
+        "title": " Grid view"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button#list-view-option-grid",
+      "xpath": ""
+    },
+    {
+      "element_id": 18,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": "Selected:  Compact view",
+        "title": "Selected:  Compact view"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button#list-view-option-compact",
+      "xpath": ""
+    },
+    {
+      "element_id": 19,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": "Open filter prompt"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button.ipc-chip-dropdown__chip.ipc-chip",
+      "xpath": ""
+    },
+    {
+      "element_id": 20,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": "Ascending sort order",
+        "title": "Ascending sort order"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button#swap-sort-order-button",
+      "xpath": ""
+    },
+    {
+      "element_id": 21,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "Rate",
+      "attributes": {
+        "aria-label": "Rate The Shawshank Redemption"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button.ipc-rate-button.sc-d4ff1917-1",
+      "xpath": ""
+    },
+    {
+      "element_id": 22,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "Mark as watched",
+      "attributes": {
+        "aria-label": "Mark The Shawshank Redemption as watched"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button.ipc-btn.ipc-btn--half-padding",
+      "xpath": ""
+    },
+    {
+      "element_id": 23,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "",
+      "attributes": {
+        "aria-label": "See more information about The Shawshank Redemption",
+        "title": "See more information about The Shawshank Redemption"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "button.ipc-icon-button.li-info-icon",
+      "xpath": ""
+    },
+    {
+      "element_id": 24,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "Back to top",
+      "attributes": {
+        "aria-label": "Back to top"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "button.ipc-scroll-to-top-button.sc-e7b02d53-0",
+      "xpath": ""
+    },
+    {
+      "element_id": 25,
+      "element_type": "checkbox",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "imdbHeader-navDrawer",
+        "type": "checkbox"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#imdbHeader-navDrawer",
+      "xpath": ""
+    },
+    {
+      "element_id": 26,
+      "element_type": "radio",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-categories-list",
+        "type": "radio"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-link-categories-mov",
+      "xpath": ""
+    },
+    {
+      "element_id": 27,
+      "element_type": "radio",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-categories-list",
+        "type": "radio"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-link-categories-tvshows",
+      "xpath": ""
+    },
+    {
+      "element_id": 28,
+      "element_type": "radio",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-categories-list",
+        "type": "radio"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-link-categories-video",
+      "xpath": ""
+    },
+    {
+      "element_id": 29,
+      "element_type": "radio",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-categories-list",
+        "type": "radio"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-link-categories-awards",
+      "xpath": ""
+    },
+    {
+      "element_id": 30,
+      "element_type": "radio",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-categories-list",
+        "type": "radio"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-link-categories-celebs",
+      "xpath": ""
+    },
+    {
+      "element_id": 31,
+      "element_type": "radio",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-categories-list",
+        "type": "radio"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-link-categories-comm",
+      "xpath": ""
+    },
+    {
+      "element_id": 32,
+      "element_type": "checkbox",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "imdbHeader-navLanguageSelectorDrawer",
+        "type": "checkbox"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#imdbHeader-navLanguageSelectorDrawer",
+      "xpath": ""
+    },
+    {
+      "element_id": 33,
+      "element_type": "checkbox",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "navSearch-searchState",
+        "type": "checkbox"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#navSearch-searchState",
+      "xpath": ""
+    },
+    {
+      "element_id": 34,
+      "element_type": "text_input",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "aria-label": "Search IMDb",
+        "placeholder": "Search IMDb",
+        "name": "q",
+        "type": "text"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "input#suggestion-search",
+      "xpath": ""
+    },
+    {
+      "element_id": 35,
+      "element_type": "text_input",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "ref_",
+        "type": "hidden",
+        "value": "chttp_nv_srb_sm"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "input[name='ref_']",
+      "xpath": ""
+    },
+    {
+      "element_id": 36,
+      "element_type": "checkbox",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "nav-language-selector",
+        "type": "checkbox"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "input#nav-language-selector",
+      "xpath": ""
+    },
+    {
+      "element_id": 37,
+      "element_type": "text_input",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "ue_back",
+        "type": "hidden",
+        "value": "1"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: ue_backdetect",
+      "children_count": 0,
+      "css_selector": "input[name='ue_back']",
+      "xpath": ""
+    },
+    {
+      "element_id": 38,
+      "element_type": "select",
+      "tag_name": "select",
+      "text": "RankingIMDb ratingRelease dateNumber of ratingsAlphabeticalPopularityRuntime",
+      "attributes": {
+        "aria-label": "Sort by"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "select#sort-by-selector",
+      "xpath": ""
+    },
+    {
+      "element_id": 39,
+      "element_type": "heading",
+      "tag_name": "h1",
+      "text": "IMDb Top 250 movies",
+      "attributes": {},
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "h1.ipc-title__text.chart-layout-specific-title-text",
+      "xpath": ""
+    },
+    {
+      "element_id": 40,
+      "element_type": "heading",
+      "tag_name": "h3",
+      "text": "The Shawshank Redemption",
+      "attributes": {},
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "h3.ipc-title__text",
+      "xpath": ""
+    },
+    {
+      "element_id": 41,
+      "element_type": "paragraph",
+      "tag_name": "p",
+      "text": "The top rated movie list only includes feature films.",
+      "attributes": {},
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "p",
+      "xpath": ""
+    },
+    {
+      "element_id": 42,
+      "element_type": "paragraph",
+      "tag_name": "p",
+      "text": "\u00a9 1990-2026by IMDb.com, Inc.",
+      "attributes": {},
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "p.imdb-footer__copyright.footer__copyright",
+      "xpath": ""
+    },
+    {
+      "element_id": 43,
+      "element_type": "image",
+      "tag_name": "img",
+      "text": "",
+      "attributes": {},
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "img",
+      "xpath": ""
+    },
+    {
+      "element_id": 44,
+      "element_type": "image",
+      "tag_name": "img",
+      "text": "",
+      "attributes": {
+        "alt": "Tim Robbins in The Shawshank Redemption (1994)"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "img.ipc-image",
+      "xpath": ""
+    },
+    {
+      "element_id": 45,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "MenuMoviesRelease calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlightTV showsWhat's on TV & streamingTop 250 TV showsMost po",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.ipc-page-content-container.ipc-page-content-container--center",
+      "xpath": ""
+    },
+    {
+      "element_id": 46,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--menu",
+      "xpath": ""
+    },
+    {
+      "element_id": 47,
+      "element_type": "other",
+      "tag_name": "aside",
+      "text": "MoviesRelease calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlightTV showsWhat's on TV & streamingTop 250 TV showsMost popula",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "aside.sc-51ad2e8b-0.jgTNuF",
+      "xpath": ""
+    },
+    {
+      "element_id": 48,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "MoviesRelease calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlightTV showsWhat's on TV & streamingTop 250 TV showsMost popula",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.drawer__panel",
+      "xpath": ""
+    },
+    {
+      "element_id": 49,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.drawer__panelHeader",
+      "xpath": ""
+    },
+    {
+      "element_id": 50,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--clear",
+      "xpath": ""
+    },
+    {
+      "element_id": 51,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "MoviesRelease calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlightTV showsWhat's on TV & streamingTop 250 TV showsMost popula",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.drawer__panelContent",
+      "xpath": ""
+    },
+    {
+      "element_id": 52,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "MoviesRelease calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlightTV showsWhat's on TV & streamingTop 250 TV showsMost popula",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.sc-e0036dce-0.dAcoET",
+      "xpath": ""
+    },
+    {
+      "element_id": 53,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "MoviesRelease calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlight",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.sc-60582a8c-0.iqgBIQ",
+      "xpath": ""
+    },
+    {
+      "element_id": 54,
+      "element_type": "button",
+      "tag_name": "label",
+      "text": "Movies",
+      "attributes": {
+        "aria-label": "Expand Movies nav links",
+        "role": "button"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "label.navlinkcat__item",
+      "xpath": ""
+    },
+    {
+      "element_id": 55,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--movie",
+      "xpath": ""
+    },
+    {
+      "element_id": 56,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--chevron-right",
+      "xpath": ""
+    },
+    {
+      "element_id": 57,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "Release calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlight",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.navlinkcat__listContainerInner",
+      "xpath": ""
+    },
+    {
+      "element_id": 58,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "Release calendarTop 250 moviesMost popular moviesBrowse movies by genreTop box officeShowtimes & ticketsMovie newsIndia movie spotlight",
+      "attributes": {
+        "role": "menu"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "ul.ipc-list.navlinkcat__list",
+      "xpath": ""
+    },
+    {
+      "element_id": 59,
+      "element_type": "other",
+      "tag_name": "span",
+      "text": "Release calendar",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "span.ipc-list-item__text",
+      "xpath": ""
+    },
+    {
+      "element_id": 60,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--television",
+      "xpath": ""
+    },
+    {
+      "element_id": 61,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--video-library",
+      "xpath": ""
+    },
+    {
+      "element_id": 62,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--star-circle-filled",
+      "xpath": ""
+    },
+    {
+      "element_id": 63,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--people",
+      "xpath": ""
+    },
+    {
+      "element_id": 64,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--earth",
+      "xpath": ""
+    },
+    {
+      "element_id": 65,
+      "element_type": "other",
+      "tag_name": "span",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "span.ipc-list-item__icon.ipc-list-item__icon--post",
+      "xpath": ""
+    },
+    {
+      "element_id": 66,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--launch",
+      "xpath": ""
+    },
+    {
+      "element_id": 67,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "LanguageEnglish (United States)",
+      "attributes": {
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li.ipc-list__item.ipc-list__item--non-clickable",
+      "xpath": ""
+    },
+    {
+      "element_id": 68,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--arrow-drop-down",
+      "xpath": ""
+    },
+    {
+      "element_id": 69,
+      "element_type": "button",
+      "tag_name": "label",
+      "text": "",
+      "attributes": {
+        "aria-label": "Close navigation drawer",
+        "role": "button"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "label.drawer__backdrop",
+      "xpath": ""
+    },
+    {
+      "element_id": 70,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "Language",
+      "attributes": {
+        "role": "menu"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "ul.ipc-list.ipc-list--baseAlt",
+      "xpath": ""
+    },
+    {
+      "element_id": 71,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "",
+      "attributes": {
+        "role": "separator"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li.ipc-list-divider",
+      "xpath": ""
+    },
+    {
+      "element_id": 72,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "Fully supportedEnglish (United States)",
+      "attributes": {
+        "role": "menu"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "ul.ipc-list.nav-fully-supported-languages",
+      "xpath": ""
+    },
+    {
+      "element_id": 73,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "English (United States)",
+      "attributes": {
+        "aria-label": "English (United States)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-en-US",
+      "xpath": ""
+    },
+    {
+      "element_id": 74,
+      "element_type": "other",
+      "tag_name": "span",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "span.language-menu-item-span.ipc-list-item__icon",
+      "xpath": ""
+    },
+    {
+      "element_id": 75,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--radio-button-checked",
+      "xpath": ""
+    },
+    {
+      "element_id": 76,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "Partially supportedFran\u00e7ais (Canada)Fran\u00e7ais (France)Deutsch (Deutschland)\u0939\u093f\u0902\u0926\u0940 (\u092d\u093e\u0930\u0924)Italiano (Italia)Portugu\u00eas (Brasil)Espa\u00f1ol (Espa\u00f1a)Espa\u00f1ol (M\u00e9xico)",
+      "attributes": {
+        "role": "menu"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "ul.ipc-list.nav-partially-supported-languages",
+      "xpath": ""
+    },
+    {
+      "element_id": 77,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--help-outline",
+      "xpath": ""
+    },
+    {
+      "element_id": 78,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Fran\u00e7ais (Canada)",
+      "attributes": {
+        "aria-label": "Fran\u00e7ais (Canada)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-fr-CA",
+      "xpath": ""
+    },
+    {
+      "element_id": 79,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--radio-button-unchecked",
+      "xpath": ""
+    },
+    {
+      "element_id": 80,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Fran\u00e7ais (France)",
+      "attributes": {
+        "aria-label": "Fran\u00e7ais (France)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-fr-FR",
+      "xpath": ""
+    },
+    {
+      "element_id": 81,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Deutsch (Deutschland)",
+      "attributes": {
+        "aria-label": "Deutsch (Deutschland)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-de-DE",
+      "xpath": ""
+    },
+    {
+      "element_id": 82,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "\u0939\u093f\u0902\u0926\u0940 (\u092d\u093e\u0930\u0924)",
+      "attributes": {
+        "aria-label": "\u0939\u093f\u0902\u0926\u0940 (\u092d\u093e\u0930\u0924)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-hi-IN",
+      "xpath": ""
+    },
+    {
+      "element_id": 83,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Italiano (Italia)",
+      "attributes": {
+        "aria-label": "Italiano (Italia)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-it-IT",
+      "xpath": ""
+    },
+    {
+      "element_id": 84,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Portugu\u00eas (Brasil)",
+      "attributes": {
+        "aria-label": "Portugu\u00eas (Brasil)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-pt-BR",
+      "xpath": ""
+    },
+    {
+      "element_id": 85,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Espa\u00f1ol (Espa\u00f1a)",
+      "attributes": {
+        "aria-label": "Espa\u00f1ol (Espa\u00f1a)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-es-ES",
+      "xpath": ""
+    },
+    {
+      "element_id": 86,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "Espa\u00f1ol (M\u00e9xico)",
+      "attributes": {
+        "aria-label": "Espa\u00f1ol (M\u00e9xico)",
+        "role": "menuitem"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "li#language-option-es-MX",
+      "xpath": ""
+    },
+    {
+      "element_id": 87,
+      "element_type": "other",
+      "tag_name": "form",
+      "text": "AllAll",
+      "attributes": {
+        "name": "nav-search-form",
+        "role": "search",
+        "action": "/find",
+        "method": "get"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "form#nav-search-form",
+      "xpath": ""
+    },
+    {
+      "element_id": 88,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "combobox"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "div.react-autosuggest__container",
+      "xpath": ""
+    },
+    {
+      "element_id": 89,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "listbox"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "div#react-autowhatever-navSuggestionSearch",
+      "xpath": ""
+    },
+    {
+      "element_id": 90,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "status"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "div#announcement-text",
+      "xpath": ""
+    },
+    {
+      "element_id": 91,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside form: nav-search-form",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--magnify",
+      "xpath": ""
+    },
+    {
+      "element_id": 92,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--watchlist",
+      "xpath": ""
+    },
+    {
+      "element_id": 93,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "Fully supportedEnglish (United States)Partially supportedFran\u00e7ais (Canada)Fran\u00e7ais (France)Deutsch (Deutschland)\u0939\u093f\u0902\u0926\u0940 (\u092d\u093e\u0930\u0924)Italiano (Italia)Portugu\u00eas (Brasil)Espa\u00f1ol (Espa\u00f1a)Espa\u00f1ol (M\u00e9xico)",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.ipc-menu.mdc-menu",
+      "xpath": ""
+    },
+    {
+      "element_id": 94,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "Fully supportedEnglish (United States)Partially supportedFran\u00e7ais (Canada)Fran\u00e7ais (France)Deutsch (Deutschland)\u0939\u093f\u0902\u0926\u0940 (\u092d\u093e\u0930\u0924)Italiano (Italia)Portugu\u00eas (Brasil)Espa\u00f1ol (Espa\u00f1a)Espa\u00f1ol (M\u00e9xico)",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.ipc-menu__items.mdc-menu__items",
+      "xpath": ""
+    },
+    {
+      "element_id": 95,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "status"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside nav: navigation",
+      "children_count": 0,
+      "css_selector": "div.ipc-snacklive",
+      "xpath": ""
+    },
+    {
+      "element_id": 96,
+      "element_type": "other",
+      "tag_name": "main",
+      "text": "IMDbChartsShareIMDb Top 250 moviesAs rated by regular IMDb voters.250 TitlesSort byRankingRankingIMDb ratingRelease dateNumber of ratingsAlphabeticalPopularityRuntime#1The Shawshank Redemption19942h 2",
+      "attributes": {
+        "role": "main"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "main.ipc-page-wrapper.ipc-page-wrapper--baseAlt",
+      "xpath": ""
+    },
+    {
+      "element_id": 97,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--share",
+      "xpath": ""
+    },
+    {
+      "element_id": 98,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--list-inline",
+      "xpath": ""
+    },
+    {
+      "element_id": 99,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--grid-view",
+      "xpath": ""
+    },
+    {
+      "element_id": 100,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-chip-list__arrow.ipc-chip-list__arrow--left",
+      "xpath": ""
+    },
+    {
+      "element_id": 101,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--chevron-left-inline",
+      "xpath": ""
+    },
+    {
+      "element_id": 102,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--filter-list",
+      "xpath": ""
+    },
+    {
+      "element_id": 103,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-chip-list__arrow.ipc-chip-list__arrow--right",
+      "xpath": ""
+    },
+    {
+      "element_id": 104,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--chevron-right-inline",
+      "xpath": ""
+    },
+    {
+      "element_id": 105,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--ascending",
+      "xpath": ""
+    },
+    {
+      "element_id": 106,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "#1The Shawshank Redemption19942h 22mR9.3(3.2M)RateMark as watched#2The Godfather19722h 55mR9.2(2.2M)RateMark as watched#3The Dark Knight20082h 32mPG-139.1(3.1M)RateMark as watched#4The Godfather Part ",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "ul.ipc-metadata-list.ipc-metadata-list--dividers-none",
+      "xpath": ""
+    },
+    {
+      "element_id": 107,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "group"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-poster.ipc-poster--base",
+      "xpath": ""
+    },
+    {
+      "element_id": 108,
+      "element_type": "button",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "aria-label": "Add to Watchlist",
+        "role": "button"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-watchlist-ribbon.ipc-focusable",
+      "xpath": ""
+    },
+    {
+      "element_id": 109,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-watchlist-ribbon__bg",
+      "xpath": ""
+    },
+    {
+      "element_id": 110,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-watchlist-ribbon__icon",
+      "xpath": ""
+    },
+    {
+      "element_id": 111,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--add",
+      "xpath": ""
+    },
+    {
+      "element_id": 112,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "#1",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-signpost.ipc-signpost--accent1",
+      "xpath": ""
+    },
+    {
+      "element_id": 113,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "#1",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "div.ipc-signpost__text",
+      "xpath": ""
+    },
+    {
+      "element_id": 114,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "The Shawshank Redemption",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "ul.ipc-inline-list.base",
+      "xpath": ""
+    },
+    {
+      "element_id": 115,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "19942h 22mR",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "ul.ipc-inline-list.ipc-inline-list--show-dividers",
+      "xpath": ""
+    },
+    {
+      "element_id": 116,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--star-inline",
+      "xpath": ""
+    },
+    {
+      "element_id": 117,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--star-border-inline",
+      "xpath": ""
+    },
+    {
+      "element_id": 118,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--visibility",
+      "xpath": ""
+    },
+    {
+      "element_id": 119,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "main content",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--info",
+      "xpath": ""
+    },
+    {
+      "element_id": 120,
+      "element_type": "other",
+      "tag_name": "ul",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "ul.ipc-inline-list.footer__linksRow",
+      "xpath": ""
+    },
+    {
+      "element_id": 121,
+      "element_type": "list_item",
+      "tag_name": "li",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "li.ipc-inline-list__item",
+      "xpath": ""
+    },
+    {
+      "element_id": 122,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--tiktok",
+      "xpath": ""
+    },
+    {
+      "element_id": 123,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--instagram",
+      "xpath": ""
+    },
+    {
+      "element_id": 124,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--twitter",
+      "xpath": ""
+    },
+    {
+      "element_id": 125,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--youtube",
+      "xpath": ""
+    },
+    {
+      "element_id": 126,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--facebook",
+      "xpath": ""
+    },
+    {
+      "element_id": 127,
+      "element_type": "other",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {
+        "role": "group"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "div.ipc-photo.ipc-photo--baseAlt",
+      "xpath": ""
+    },
+    {
+      "element_id": 128,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "inside footer",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--launch-inline",
+      "xpath": ""
+    },
+    {
+      "element_id": 129,
+      "element_type": "other",
+      "tag_name": "svg",
+      "text": "",
+      "attributes": {
+        "role": "presentation"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "bounding_box": null,
+      "parent_context": "",
+      "children_count": 0,
+      "css_selector": "svg.ipc-icon.ipc-icon--expand-less",
+      "xpath": ""
+    }
+  ],
+  "forms": [
+    {
+      "name": "nav-search-form",
+      "action": "/find",
+      "method": "GET",
+      "field_ids": [
+        14,
+        34,
+        35,
+        88,
+        89,
+        90,
+        91
+      ]
+    },
+    {
+      "name": "ue_backdetect",
+      "action": "get",
+      "method": "GET",
+      "field_ids": [
+        37
+      ]
+    }
+  ],
+  "navigation": [
+    {
+      "label": "navigation",
+      "element_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        14,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    }
+  ],
+  "viewport_width": 1920,
+  "viewport_height": 1080,
+  "scroll_position": 0.0,
+  "has_more_content_below": true,
+  "timestamp": 1773490154.8264244
+}

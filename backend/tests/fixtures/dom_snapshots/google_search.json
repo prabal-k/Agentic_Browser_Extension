@@ -1,0 +1,110 @@
+{
+  "url": "https://www.google.com",
+  "title": "Google",
+  "meta_description": "Search the world's information",
+  "page_text_summary": "Google offered in multiple languages. Advertising, Business Solutions, Privacy, Terms, Settings.",
+  "elements": [
+    {
+      "element_id": 1,
+      "element_type": "text_input",
+      "tag_name": "textarea",
+      "text": "",
+      "attributes": {
+        "aria-label": "Search",
+        "name": "q",
+        "role": "combobox",
+        "placeholder": ""
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "is_focused": false,
+      "parent_context": "inside form: Search",
+      "css_selector": "textarea[name='q']",
+      "bounding_box": {"x": 470, "y": 350, "width": 580, "height": 44}
+    },
+    {
+      "element_id": 2,
+      "element_type": "button",
+      "tag_name": "input",
+      "text": "Google Search",
+      "attributes": {"type": "submit", "name": "btnK", "aria-label": "Google Search"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Search",
+      "css_selector": "input[name='btnK']",
+      "bounding_box": {"x": 580, "y": 420, "width": 120, "height": 36}
+    },
+    {
+      "element_id": 3,
+      "element_type": "button",
+      "tag_name": "input",
+      "text": "I'm Feeling Lucky",
+      "attributes": {"type": "submit", "name": "btnI"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Search",
+      "css_selector": "input[name='btnI']",
+      "bounding_box": {"x": 720, "y": 420, "width": 140, "height": 36}
+    },
+    {
+      "element_id": 4,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Gmail",
+      "attributes": {"href": "https://mail.google.com/mail/"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav bar: top right",
+      "css_selector": "a[href*='mail.google']"
+    },
+    {
+      "element_id": 5,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Images",
+      "attributes": {"href": "https://www.google.com/imghp"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav bar: top right"
+    },
+    {
+      "element_id": 6,
+      "element_type": "icon_button",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {"aria-label": "Search by voice", "role": "button"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Search"
+    },
+    {
+      "element_id": 7,
+      "element_type": "icon_button",
+      "tag_name": "div",
+      "text": "",
+      "attributes": {"aria-label": "Search by image", "role": "button"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Search"
+    }
+  ],
+  "forms": [
+    {
+      "name": "Search",
+      "action": "/search",
+      "method": "GET",
+      "field_ids": [1, 2, 3]
+    }
+  ],
+  "navigation": [
+    {
+      "label": "Top Navigation",
+      "element_ids": [4, 5]
+    }
+  ],
+  "viewport_width": 1920,
+  "viewport_height": 1080,
+  "scroll_position": 0.0,
+  "has_more_content_below": false,
+  "timestamp": 1700000000.0
+}

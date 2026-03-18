@@ -1,0 +1,80 @@
+[
+  {
+    "name": "github_explore_search_repo",
+    "status": "failed",
+    "elapsed_seconds": 455.72,
+    "iterations": 8,
+    "nodes_visited_count": 86,
+    "unique_nodes": [
+      "reason",
+      "create_plan",
+      "evaluate",
+      "decide_action",
+      "analyze_goal",
+      "__interrupt__",
+      "finalize",
+      "critique_plan",
+      "execute_action_node",
+      "confirm_action",
+      "handle_retry",
+      "self_critique_action",
+      "observe"
+    ],
+    "interrupt_count": 16,
+    "plan_steps": 2,
+    "completed_steps": 0,
+    "total_actions": 8
+  },
+  {
+    "name": "imdb_find_top_movie",
+    "status": "failed",
+    "elapsed_seconds": 143.91,
+    "iterations": 3,
+    "nodes_visited_count": 33,
+    "unique_nodes": [
+      "reason",
+      "create_plan",
+      "evaluate",
+      "decide_action",
+      "analyze_goal",
+      "__interrupt__",
+      "finalize",
+      "critique_plan",
+      "execute_action_node",
+      "confirm_action",
+      "handle_retry",
+      "self_critique_action",
+      "observe"
+    ],
+    "interrupt_count": 6,
+    "plan_steps": 1,
+    "completed_steps": 0,
+    "total_actions": 3
+  },
+  {
+    "name": "github_sign_in_flow",
+    "status": "failed",
+    "elapsed_seconds": 279.58,
+    "iterations": 4,
+    "nodes_visited_count": 47,
+    "unique_nodes": [
+      "reason",
+      "create_plan",
+      "evaluate",
+      "decide_action",
+      "analyze_goal",
+      "__interrupt__",
+      "finalize",
+      "critique_plan",
+      "execute_action_node",
+      "confirm_action",
+      "handle_retry",
+      "self_critique_action",
+      "observe"
+    ],
+    "interrupt_count": 8,
+    "plan_steps": 5,
+    "completed_steps": 1,
+    "total_actions": 4
+  }
+]

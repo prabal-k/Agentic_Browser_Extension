@@ -1,0 +1,157 @@
+{
+  "url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+  "title": "Artificial intelligence - Wikipedia",
+  "meta_description": "Artificial intelligence (AI) is the intelligence of machines or software.",
+  "page_text_summary": "Artificial intelligence (AI), in its broadest sense, is intelligence exhibited by machines, particularly computer systems. It is a field of research in computer science that develops and studies methods and software that enable machines to perceive their environment and use learning and intelligence to take actions that maximize their chances of achieving defined goals.",
+  "elements": [
+    {
+      "element_id": 1,
+      "element_type": "text_input",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "search",
+        "placeholder": "Search Wikipedia",
+        "aria-label": "Search Wikipedia",
+        "type": "search"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Search",
+      "css_selector": "input#searchInput"
+    },
+    {
+      "element_id": 2,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "Search",
+      "attributes": {"type": "submit"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Search"
+    },
+    {
+      "element_id": 3,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Main page",
+      "attributes": {"href": "/wiki/Main_Page"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Sidebar"
+    },
+    {
+      "element_id": 4,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Contents",
+      "attributes": {"href": "/wiki/Wikipedia:Contents"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Sidebar"
+    },
+    {
+      "element_id": 5,
+      "element_type": "heading",
+      "tag_name": "h1",
+      "text": "Artificial intelligence",
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "main content"
+    },
+    {
+      "element_id": 6,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "machine learning",
+      "attributes": {"href": "/wiki/Machine_learning"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside paragraph: Introduction"
+    },
+    {
+      "element_id": 7,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "natural language processing",
+      "attributes": {"href": "/wiki/Natural_language_processing"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside paragraph: Introduction"
+    },
+    {
+      "element_id": 8,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "[edit]",
+      "attributes": {"href": "/w/index.php?title=Artificial_intelligence&action=edit&section=1"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside section: History"
+    },
+    {
+      "element_id": 9,
+      "element_type": "heading",
+      "tag_name": "h2",
+      "text": "History",
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "main content"
+    },
+    {
+      "element_id": 10,
+      "element_type": "heading",
+      "tag_name": "h2",
+      "text": "Goals",
+      "is_visible": false,
+      "is_enabled": true,
+      "parent_context": "main content"
+    },
+    {
+      "element_id": 11,
+      "element_type": "nav_item",
+      "tag_name": "li",
+      "text": "History",
+      "attributes": {"href": "#History"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Table of Contents"
+    },
+    {
+      "element_id": 12,
+      "element_type": "nav_item",
+      "tag_name": "li",
+      "text": "Goals",
+      "attributes": {"href": "#Goals"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Table of Contents"
+    },
+    {
+      "element_id": 13,
+      "element_type": "paragraph",
+      "tag_name": "p",
+      "text": "Artificial intelligence (AI), in its broadest sense, is intelligence exhibited by machines, particularly computer systems.",
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "main content: Introduction"
+    }
+  ],
+  "forms": [
+    {
+      "name": "Search",
+      "action": "/w/index.php",
+      "method": "GET",
+      "field_ids": [1, 2]
+    }
+  ],
+  "navigation": [
+    {"label": "Sidebar", "element_ids": [3, 4]},
+    {"label": "Table of Contents", "element_ids": [11, 12]}
+  ],
+  "viewport_width": 1920,
+  "viewport_height": 1080,
+  "scroll_position": 0.0,
+  "has_more_content_below": true,
+  "timestamp": 1700000100.0
+}

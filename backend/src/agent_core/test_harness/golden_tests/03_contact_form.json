@@ -1,0 +1,16 @@
+{
+    "name": "contact_form",
+    "description": "Fill out a contact form with user-provided information",
+    "goal": "Fill the contact form with name 'John Doe', email 'john@example.com', subject 'General Inquiry', and message 'I would like more information about your services'",
+    "snapshot": "contact_form",
+    "expected_actions": [
+        {"action_type": "clear_and_type", "element_id": 1, "description": "Type name"},
+        {"action_type": "clear_and_type", "element_id": 2, "description": "Type email"},
+        {"action_type": "select_option", "element_id": 3, "description": "Select subject"},
+        {"action_type": "clear_and_type", "element_id": 4, "description": "Type message"},
+        {"action_type": "click", "element_id": 5, "description": "Check terms checkbox"},
+        {"action_type": "click", "element_id": 6, "description": "Click send button"}
+    ],
+    "expected_step_count": 6,
+    "difficulty": "medium"
+}

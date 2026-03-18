@@ -1,0 +1,164 @@
+{
+  "url": "https://example.com/contact",
+  "title": "Contact Us - Example Company",
+  "meta_description": "Get in touch with our team",
+  "page_text_summary": "Contact Us. Fill out the form below and we'll get back to you within 24 hours. You can also email us at support@example.com.",
+  "elements": [
+    {
+      "element_id": 1,
+      "element_type": "text_input",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "name",
+        "placeholder": "Your full name",
+        "type": "text",
+        "aria-label": "Full Name"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact",
+      "css_selector": "input[name='name']"
+    },
+    {
+      "element_id": 2,
+      "element_type": "text_input",
+      "tag_name": "input",
+      "text": "",
+      "attributes": {
+        "name": "email",
+        "placeholder": "your@email.com",
+        "type": "email",
+        "aria-label": "Email Address"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact",
+      "css_selector": "input[name='email']"
+    },
+    {
+      "element_id": 3,
+      "element_type": "select",
+      "tag_name": "select",
+      "text": "",
+      "attributes": {
+        "name": "subject",
+        "aria-label": "Subject"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact",
+      "css_selector": "select[name='subject']"
+    },
+    {
+      "element_id": 4,
+      "element_type": "textarea",
+      "tag_name": "textarea",
+      "text": "",
+      "attributes": {
+        "name": "message",
+        "placeholder": "How can we help you?",
+        "aria-label": "Message"
+      },
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact",
+      "css_selector": "textarea[name='message']"
+    },
+    {
+      "element_id": 5,
+      "element_type": "checkbox",
+      "tag_name": "input",
+      "text": "I agree to the terms and conditions",
+      "attributes": {"type": "checkbox", "name": "agree_terms"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact"
+    },
+    {
+      "element_id": 6,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "Send Message",
+      "attributes": {"type": "submit"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact",
+      "css_selector": "button[type='submit']"
+    },
+    {
+      "element_id": 7,
+      "element_type": "button",
+      "tag_name": "button",
+      "text": "Clear Form",
+      "attributes": {"type": "reset"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside form: Contact"
+    },
+    {
+      "element_id": 8,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Home",
+      "attributes": {"href": "/"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Main Navigation"
+    },
+    {
+      "element_id": 9,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "About",
+      "attributes": {"href": "/about"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Main Navigation"
+    },
+    {
+      "element_id": 10,
+      "element_type": "link",
+      "tag_name": "a",
+      "text": "Contact",
+      "attributes": {"href": "/contact"},
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "inside nav: Main Navigation"
+    },
+    {
+      "element_id": 11,
+      "element_type": "heading",
+      "tag_name": "h1",
+      "text": "Contact Us",
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "main content"
+    },
+    {
+      "element_id": 12,
+      "element_type": "paragraph",
+      "tag_name": "p",
+      "text": "Fill out the form below and we'll get back to you within 24 hours.",
+      "is_visible": true,
+      "is_enabled": true,
+      "parent_context": "main content"
+    }
+  ],
+  "forms": [
+    {
+      "name": "Contact",
+      "action": "/api/contact",
+      "method": "POST",
+      "field_ids": [1, 2, 3, 4, 5, 6, 7]
+    }
+  ],
+  "navigation": [
+    {"label": "Main Navigation", "element_ids": [8, 9, 10]}
+  ],
+  "viewport_width": 1920,
+  "viewport_height": 1080,
+  "scroll_position": 0.0,
+  "has_more_content_below": false,
+  "timestamp": 1700000200.0
+}

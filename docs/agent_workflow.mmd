@@ -1,0 +1,57 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	analyze_and_plan(analyze_and_plan)
+	create_plan(create_plan)
+	critique_plan(critique_plan)
+	reason(reason)
+	decide_action(decide_action)
+	confirm_action(confirm_action)
+	execute_action_node(execute_action_node)
+	observe(observe)
+	smart_evaluate(smart_evaluate)
+	evaluate(evaluate)
+	self_critique_action(self_critique_action)
+	handle_retry(handle_retry)
+	verify_goal(verify_goal)
+	ask_user_node(ask_user_node)
+	finalize(finalize)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> analyze_and_plan;
+	analyze_and_plan --> decide_action;
+	ask_user_node --> reason;
+	confirm_action -.-> execute_action_node;
+	confirm_action -.-> reason;
+	create_plan --> critique_plan;
+	critique_plan -.-> create_plan;
+	critique_plan -.-> decide_action;
+	decide_action -.-> ask_user_node;
+	decide_action -.-> confirm_action;
+	decide_action -.-> execute_action_node;
+	decide_action -.-> finalize;
+	evaluate --> self_critique_action;
+	execute_action_node --> observe;
+	handle_retry --> decide_action;
+	observe --> smart_evaluate;
+	reason -.-> ask_user_node;
+	reason -.-> create_plan;
+	reason -.-> decide_action;
+	reason -.-> finalize;
+	self_critique_action -.-> create_plan;
+	self_critique_action -.-> decide_action;
+	self_critique_action -.-> finalize;
+	self_critique_action -.-> handle_retry;
+	self_critique_action -.-> reason;
+	self_critique_action -.-> verify_goal;
+	smart_evaluate -.-> evaluate;
+	smart_evaluate -.-> self_critique_action;
+	verify_goal -.-> create_plan;
+	verify_goal -.-> finalize;
+	finalize --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

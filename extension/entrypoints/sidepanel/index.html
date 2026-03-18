@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Browser</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div id="header-left">
+        <div id="status-dot"></div>
+        <span id="header-title">Agentic Browser</span>
+      </div>
+      <div id="header-right">
+        <span id="status-text">Disconnected</span>
+        <span id="session-id"></span>
+      </div>
+    </header>
+
+    <!-- Live Status Bar (shows during agent work) -->
+    <div id="live-status" class="hidden">
+      <div id="live-status-text">Analyzing goal...</div>
+      <div id="live-progress-track"><div id="live-progress-fill"></div></div>
+    </div>
+
+    <!-- Messages Area -->
+    <div id="messages">
+      <div id="welcome">
+        <div class="welcome-icon">&#x1F310;</div>
+        <p class="welcome-title">Agentic Browser</p>
+        <p class="welcome-sub">Your AI-powered web assistant</p>
+        <p class="welcome-hint">Connect to the server, then describe what you want to do</p>
+      </div>
+    </div>
+
+    <!-- Interrupt Panel (hidden by default) -->
+    <div id="interrupt-panel" class="hidden">
+      <div id="interrupt-title"></div>
+      <div id="interrupt-context"></div>
+      <div id="interrupt-fields"></div>
+    </div>
+
+    <!-- Input Area -->
+    <div id="input-area">
+      <div id="input-row">
+        <input type="text" id="goal-input" placeholder="Connect first..." disabled />
+        <button id="send-btn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+        </button>
+        <button id="stop-btn" class="hidden">Stop</button>
+      </div>
+    </div>
+
+    <!-- Bottom Bar: Settings + Connect -->
+    <div id="bottom-bar">
+      <button id="settings-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+      <button id="connect-btn">Connect</button>
+      <div id="provider-dots">
+        <span class="pdot" id="openai-status" title="OpenAI"></span>
+        <span class="pdot" id="groq-status" title="Groq"></span>
+        <span class="pdot" id="ollama-status" title="Ollama"></span>
+      </div>
+    </div>
+
+    <!-- Settings Panel (collapsible) -->
+    <div id="settings-panel" class="hidden">
+      <!-- Server URL -->
+      <div class="s-group">
+        <div class="s-label">Server</div>
+        <div class="s-row">
+          <input type="text" id="server-url" value="ws://localhost:8000/ws" />
+          <button id="save-url-btn" class="s-btn">Save</button>
+        </div>
+      </div>
+
+      <!-- API Keys -->
+      <div class="s-group">
+        <div class="s-label">API Keys</div>
+        <div class="s-row">
+          <span class="s-icon">O</span>
+          <input type="password" id="openai-key-input" placeholder="OpenAI key (sk-...)" autocomplete="off" />
+        </div>
+        <div class="s-row">
+          <span class="s-icon">G</span>
+          <input type="password" id="groq-key-input" placeholder="Groq key (gsk_...)" autocomplete="off" />
+        </div>
+        <div class="s-row">
+          <span class="s-icon">L</span>
+          <input type="text" id="ollama-url-input" placeholder="Ollama URL (http://localhost:11434)" />
+        </div>
+        <button id="save-keys-btn" class="s-btn wide">Save Keys</button>
+      </div>
+
+      <!-- Model Selection -->
+      <div class="s-group">
+        <div class="s-label">Model</div>
+        <div class="s-row">
+          <select id="provider-select">
+            <option value="">Auto-detect</option>
+            <option value="openai">OpenAI</option>
+            <option value="groq">Groq</option>
+            <option value="ollama">Ollama</option>
+          </select>
+          <select id="model-select">
+            <option value="">Default</option>
+          </select>
+        </div>
+        <div class="s-row">
+          <input type="text" id="custom-model-input" placeholder="Custom model name..." />
+          <button id="add-model-btn" class="s-btn">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

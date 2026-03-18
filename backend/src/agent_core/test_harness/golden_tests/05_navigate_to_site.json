@@ -1,0 +1,11 @@
+{
+    "name": "navigate_to_site",
+    "description": "Navigate to a different website entirely",
+    "goal": "Go to Gmail",
+    "snapshot": "google_search",
+    "expected_actions": [
+        {"action_type": "click", "element_id": 4, "description": "Click Gmail link"}
+    ],
+    "expected_step_count": 1,
+    "difficulty": "simple"
+}
