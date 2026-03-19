@@ -167,12 +167,21 @@ def _extract_value(args: dict) -> str | None:
 
 
 # URL extraction pattern — finds URLs in user's goal text
-_URL_PATTERN = re.compile(r'https?://[^\s<>"\']+')
+# Allows apostrophes, parentheses, and other common URL characters
+_URL_PATTERN = re.compile(r'https?://[^\s<>"]+')
 
 
 def _extract_urls_from_text(text: str) -> list[str]:
     """Extract URLs from free-form text."""
-    return _URL_PATTERN.findall(text)
+    urls = _URL_PATTERN.findall(text)
+    # Clean trailing punctuation that isn't part of the URL
+    cleaned = []
+    for url in urls:
+        # Strip trailing periods, commas, semicolons (sentence endings)
+        url = url.rstrip('.,;:')
+        if url:
+            cleaned.append(url)
+    return cleaned
 
 
 # ============================================================
@@ -789,10 +798,20 @@ async def decide_action(state: AgentState) -> dict:
         requires_confirmation = action_type in _high_risk_actions
         risk_level = "high" if action_type in _high_risk_actions else "low"
 
+        # Sanitize element_id — LLM sometimes returns a list [1] instead of int 1
+        raw_eid = args.get("element_id") or args.get("source_element_id")
+        if isinstance(raw_eid, list):
+            raw_eid = raw_eid[0] if raw_eid else None
+        if raw_eid is not None:
+            try:
+                raw_eid = int(raw_eid)
+            except (ValueError, TypeError):
+                raw_eid = None
+
         action = Action(
             action_id=action_id,
             action_type=action_type,
-            element_id=args.get("element_id") or args.get("source_element_id"),
+            element_id=raw_eid,
             value=_extract_value(args),
             description=args.get("description", ""),
             reasoning=state.get("current_reasoning", ""),
@@ -1433,6 +1452,13 @@ async def self_critique_action(state: AgentState) -> dict:
 
     if not parts:
         parts.append("Continue working on the task.")
+
+    # Remind about the user's original task — the LLM should check if findings
+    # satisfy what the user asked for (format, quantity, etc.)
+    original_task = goal.original_text
+    if total_findings > 0 and len(original_task) > 20:
+        parts.append(f"\nRemember the user's original request: \"{original_task[:200]}\"")
+        parts.append("Make sure your done() summary matches what the user asked for (format, detail level, etc.)")
 
     logger.info("self_critique_direct_to_action", findings_count=total_findings)
     return {
