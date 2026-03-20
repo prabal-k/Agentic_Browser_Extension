@@ -738,6 +738,33 @@ def read_page(description: str = "") -> Action:
 
 
 @tool
+def fill_form(fields: str, submit: bool = True, description: str = "") -> Action:
+    """Fill multiple form fields at once and optionally submit.
+
+    USE WHEN: You see a form with multiple fields (login form, search + filters,
+    registration, checkout). Instead of typing into each field separately
+    (which requires a separate LLM call each), fill ALL fields in one action.
+
+    The fields parameter is a JSON string mapping element_id to value:
+    - fields='{"5": "user@email.com", "6": "mypassword123"}'
+    - fields='{"10": "1411 Howland Blvd, Deltona, FL", "12": "15"}'
+
+    Args:
+        fields: JSON string mapping element_id (as string) to the value to type.
+                Example: '{"5": "user@email.com", "6": "password123"}'
+        submit: If True, press Enter after filling all fields to submit the form.
+        description: What form you are filling and why.
+    """
+    return Action(
+        action_type=ActionType.TYPE_TEXT,
+        value=f"__FILL_FORM__|{fields}|{'SUBMIT' if submit else 'NO_SUBMIT'}",
+        description=description or "Fill form fields",
+        risk_level="medium",
+        requires_confirmation=False,
+    )
+
+
+@tool
 def ask_user(question: str, context: str = "") -> Action:
     """Ask the user a question when you need clarification.
 

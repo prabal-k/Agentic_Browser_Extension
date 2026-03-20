@@ -51,6 +51,57 @@ from agent_core.agent.nodes import (
 logger = structlog.get_logger("agent.graph")
 
 
+import re
+
+# Pattern to find email addresses in text
+_EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+
+
+def _parse_user_credentials(text: str) -> dict:
+    """Parse a natural language response to extract credentials.
+
+    Handles various formats:
+    - "prabal@email.com and password is Prabal1234"
+    - "email: prabal@email.com password: Prabal1234"
+    - "prabal@email.com / Prabal1234"
+    - "prabal@email.com" (just email)
+    - "Prabal1234" (just password, if no email found)
+    """
+    result = {"email": "", "password": ""}
+
+    # Extract email
+    email_match = _EMAIL_RE.search(text)
+    if email_match:
+        result["email"] = email_match.group(0)
+
+    # Extract password — look for common patterns
+    text_lower = text.lower()
+
+    # Pattern: "password is X" / "password: X" / "pwd: X" / "pass: X"
+    for prefix in (r'password\s*(?:is|:)\s*', r'pwd\s*(?:is|:)\s*', r'pass\s*(?:is|:)\s*'):
+        match = re.search(prefix + r'(\S+)', text, re.IGNORECASE)
+        if match:
+            result["password"] = match.group(1)
+            break
+
+    # If no password pattern found but there are 2+ words and one looks like a password
+    # (non-email, non-common-word), try to extract it
+    if not result["password"] and result["email"]:
+        # Remove the email and common connecting words
+        remaining = text.replace(result["email"], "").strip()
+        remaining = re.sub(r'\b(and|with|password|email|is|my|the|for)\b', '', remaining, flags=re.IGNORECASE).strip()
+        remaining = re.sub(r'[,:;/\-]+', ' ', remaining).strip()
+        # Whatever's left might be the password
+        parts = remaining.split()
+        if parts:
+            # Take the longest non-trivial token as the password
+            candidates = [p for p in parts if len(p) >= 4]
+            if candidates:
+                result["password"] = max(candidates, key=len)
+
+    return result
+
+
 # ============================================================
 # Interrupt Nodes (these use LangGraph interrupt())
 # ============================================================
@@ -133,11 +184,41 @@ async def ask_user_node(state: AgentState) -> dict:
     else:
         response_text = str(user_response)
 
+    # Parse multi-value responses: user might say "email is X and password is Y"
+    # Extract individual credentials from natural language responses
+    pending_field_type = state.get("pending_input_field_type", "")
+    parsed = _parse_user_credentials(response_text)
+
+    # Determine what to store as pending input
+    pending_value = response_text
+    if parsed["email"] and pending_field_type == "email":
+        pending_value = parsed["email"]
+    elif parsed["password"] and pending_field_type == "password":
+        pending_value = parsed["password"]
+
+    # Build reasoning that includes all parsed values
+    reasoning_parts = [f"User provided credentials:"]
+    if parsed["email"]:
+        reasoning_parts.append(f"  Email: {parsed['email']}")
+    if parsed["password"]:
+        reasoning_parts.append(f"  Password: (provided)")
+    if not parsed["email"] and not parsed["password"]:
+        reasoning_parts = [f"User provided {pending_field_type or 'input'}: {response_text}"]
+
+    # Store ALL parsed credentials so they can be auto-typed one by one
+    # The auto-type fast path in decide_action will use these
+    stored_credentials = state.get("_stored_credentials", {})
+    if parsed["email"]:
+        stored_credentials["email"] = parsed["email"]
+    if parsed["password"]:
+        stored_credentials["password"] = parsed["password"]
+
     return {
         "cognitive_status": CognitiveStatus.REASONING,
-        "current_reasoning": f"User clarified: {response_text}",
+        "current_reasoning": "\n".join(reasoning_parts),
+        "pending_user_input": pending_value,
+        "_stored_credentials": stored_credentials,
         "messages": [
-            # We import here to avoid circular imports at module level
             __import__("langchain_core.messages", fromlist=["HumanMessage"]).HumanMessage(
                 content=f"User response: {response_text}"
             )

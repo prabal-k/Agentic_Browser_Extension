@@ -642,9 +642,22 @@ async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
 
     case 'type_text':
     case 'fill': {
-      const shouldSubmit = value?.endsWith('|SUBMIT');
+      let shouldSubmit = value?.endsWith('|SUBMIT') || false;
       const actualText = shouldSubmit ? value!.slice(0, -7) : (value || '');
       if (!el) return { status: 'element_not_found', message: 'No element to type into', page_changed: false, execution_time_ms: 0 };
+
+      // Auto-submit for search inputs even if LLM forgot submit=True
+      if (!shouldSubmit && el) {
+        const inputEl = el as HTMLInputElement;
+        const elType = (inputEl.type || '').toLowerCase();
+        const elName = (inputEl.name || '').toLowerCase();
+        const elRole = (el.getAttribute('role') || '').toLowerCase();
+        const elPh = (inputEl.placeholder || '').toLowerCase();
+        const isSearch = elType === 'search' || elRole === 'searchbox'
+          || ['q', 'query', 'search', 'search_query'].includes(elName)
+          || ['search', 'find', 'look for'].some(w => elPh.includes(w));
+        if (isSearch) shouldSubmit = true;
+      }
 
       const typed = await typeIntoElement(el as HTMLElement, actualText, false);
       if (!typed.success) {
@@ -659,9 +672,22 @@ async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
     }
 
     case 'clear_and_type': {
-      const shouldSubmitClear = value?.endsWith('|SUBMIT');
+      let shouldSubmitClear = value?.endsWith('|SUBMIT') || false;
       const actualTextClear = shouldSubmitClear ? value!.slice(0, -7) : (value || '');
       if (!el) return { status: 'element_not_found', message: 'No element to type into', page_changed: false, execution_time_ms: 0 };
+
+      // Auto-submit for search inputs
+      if (!shouldSubmitClear && el) {
+        const inputEl = el as HTMLInputElement;
+        const elType = (inputEl.type || '').toLowerCase();
+        const elName = (inputEl.name || '').toLowerCase();
+        const elRole = (el.getAttribute('role') || '').toLowerCase();
+        const elPh = (inputEl.placeholder || '').toLowerCase();
+        const isSearch = elType === 'search' || elRole === 'searchbox'
+          || ['q', 'query', 'search', 'search_query'].includes(elName)
+          || ['search', 'find', 'look for'].some(w => elPh.includes(w));
+        if (isSearch) shouldSubmitClear = true;
+      }
 
       const typed = await typeIntoElement(el as HTMLElement, actualTextClear, true);
       if (!typed.success) {

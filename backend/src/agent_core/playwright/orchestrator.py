@@ -206,25 +206,39 @@ async def run_scenario(
                                 "time_ms": action_result.execution_time_ms,
                             })
 
-                            # Wait for page to settle after action
-                            wait_time = 2000 if action_result.page_changed else 800
-                            await page.wait_for_timeout(wait_time)
+                            # Non-mutating actions: skip DOM re-extraction (use cached context)
+                            # This saves 200-500ms per action on complex pages
+                            _NON_MUTATING = {'scroll_down', 'scroll_up', 'extract_text',
+                                             'wait', 'take_screenshot', 'get_console_logs',
+                                             'get_network_log', 'wait_for_selector',
+                                             'wait_for_navigation'}
 
-                            # Extract new DOM after action (with retry for navigation timing)
-                            try:
-                                page_context = await extract_page_context(page)
-                            except Exception:
-                                # Page might still be navigating — wait and retry
-                                await page.wait_for_timeout(2000)
+                            skip_dom = (
+                                action_type in _NON_MUTATING
+                                and not action_result.page_changed
+                            )
+
+                            if not skip_dom:
+                                # Wait for page to settle after action
+                                wait_time = 2000 if action_result.page_changed else 800
+                                await page.wait_for_timeout(wait_time)
+
+                                # Extract new DOM (with retry for navigation timing)
                                 try:
                                     page_context = await extract_page_context(page)
-                                except Exception as dom_err:
-                                    _safe_print(f"    DOM extraction failed: {str(dom_err)[:80]}")
-                                    continue
+                                except Exception:
+                                    await page.wait_for_timeout(2000)
+                                    try:
+                                        page_context = await extract_page_context(page)
+                                    except Exception as dom_err:
+                                        _safe_print(f"    DOM extraction failed: {str(dom_err)[:80]}")
+                                        continue
 
-                            safe_url = page_context.url.encode('ascii', 'replace').decode('ascii')
-                            _safe_print(f"    NEW DOM: {len(page_context.elements)} elements "
-                                  f"on {safe_url}")
+                                safe_url = page_context.url.encode('ascii', 'replace').decode('ascii')
+                                _safe_print(f"    NEW DOM: {len(page_context.elements)} elements "
+                                      f"on {safe_url}")
+                            else:
+                                _safe_print(f"    CACHED DOM (non-mutating action: {action_type})")
 
                             # Send result + new DOM back (include extracted_data for read_page/visual_check)
                             action_result_dict = {
@@ -237,11 +251,14 @@ async def run_scenario(
                             if action_result.extracted_data:
                                 action_result_dict["extracted_data"] = action_result.extracted_data
 
-                            await ws.send(json.dumps({
+                            ws_payload = {
                                 "type": "client_action_result",
                                 "action_result": action_result_dict,
-                                "new_dom_snapshot": page_context.model_dump(),
-                            }))
+                            }
+                            if not skip_dom:
+                                ws_payload["new_dom_snapshot"] = page_context.model_dump()
+
+                            await ws.send(json.dumps(ws_payload))
 
                     elif msg_type == "server_interrupt":
                         title = msg.get("title", "")

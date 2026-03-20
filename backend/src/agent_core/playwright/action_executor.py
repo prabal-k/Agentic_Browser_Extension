@@ -144,6 +144,51 @@ async def execute_action(
     return result
 
 
+def _is_search_input(page_context: PageContext, element_id: int | None) -> bool:
+    """Check if an element is a search-type input (safe to auto-submit).
+
+    Detects: input[type="search"], input[name="q"], input[role="searchbox"],
+    inputs with search-related placeholders, or the only text input on the page.
+    """
+    if element_id is None:
+        return False
+
+    target_el = None
+    text_input_count = 0
+
+    for el in page_context.elements:
+        if el.element_id == element_id:
+            target_el = el
+        # Count text inputs on the page
+        if el.element_type.value in ("text_input", "textarea"):
+            text_input_count += 1
+
+    if not target_el:
+        return False
+
+    attrs = target_el.attributes
+    el_type = attrs.get("type", "").lower()
+    el_name = attrs.get("name", "").lower()
+    el_role = attrs.get("role", "").lower()
+    el_placeholder = attrs.get("placeholder", "").lower()
+
+    # Explicit search indicators
+    if el_type == "search":
+        return True
+    if el_role == "searchbox" or el_role == "search":
+        return True
+    if el_name in ("q", "query", "search", "search_query", "keyword", "keywords"):
+        return True
+    if any(w in el_placeholder for w in ("search", "find", "look for", "type to search")):
+        return True
+
+    # If this is the only text input on the page, it's likely a search bar
+    if text_input_count == 1 and target_el.element_type.value == "text_input":
+        return True
+
+    return False
+
+
 async def _dispatch_action(
     page: Page,
     action: Action,
@@ -202,12 +247,15 @@ async def _dispatch_action(
             should_submit = raw_value.endswith("|SUBMIT")
             text = raw_value.replace("|SUBMIT", "") if should_submit else raw_value
 
-            # Try fill() first (fastest), fall back to press_sequentially (works on SPAs)
+            # Auto-submit for search inputs even if LLM forgot submit=True
+            if not should_submit and _is_search_input(page_context, action.element_id):
+                should_submit = True
+                logger.info("auto_submit_search", element_id=action.element_id)
+
+            # Try fill() first (fastest), fall back to keyboard.type (works on SPAs)
             try:
                 await locator.fill(text, timeout=timeout_ms)
             except Exception:
-                # fill() failed — element might be a custom component
-                # Fall back to clicking + typing character by character
                 await locator.click(timeout=timeout_ms)
                 await page.keyboard.type(text, delay=30)
 
@@ -225,6 +273,11 @@ async def _dispatch_action(
             raw_value = action.value or ""
             should_submit = raw_value.endswith("|SUBMIT")
             text = raw_value.replace("|SUBMIT", "") if should_submit else raw_value
+
+            # Auto-submit for search inputs even if LLM forgot submit=True
+            if not should_submit and _is_search_input(page_context, action.element_id):
+                should_submit = True
+                logger.info("auto_submit_search", element_id=action.element_id)
 
             # Clear: try fill("") first, fall back to select-all + delete
             try:

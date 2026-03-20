@@ -423,28 +423,36 @@ export default defineBackground(() => {
         },
       });
 
-      // For navigation actions, wait for the page to fully load
-      // before trying to re-extract DOM
+      // Non-mutating actions: skip DOM re-extraction (use cached context)
+      // Same optimization as Playwright orchestrator — saves 200-500ms per action
+      const NON_MUTATING = new Set([
+        'scroll_down', 'scroll_up', 'extract_text', 'wait',
+        'take_screenshot', 'get_console_logs', 'get_network_log',
+        'wait_for_selector', 'wait_for_navigation',
+      ]);
+
       const isNavAction = NAVIGATION_ACTIONS.has(action.action_type);
       const pageChanged = actionResult?.data?.page_changed;
+      const skipDom = NON_MUTATING.has(action.action_type) && !pageChanged;
 
-      if (isNavAction || pageChanged) {
-        console.log('[Agentic] Navigation detected, waiting for page load...');
-        await waitForTabLoad(tabId, 10000);
-        // Re-inject content script (old one died with the page)
-        await ensureContentScript(tabId);
-      } else {
-        // Non-navigation action — short delay for DOM to settle
-        await new Promise(r => setTimeout(r, 800));
-      }
-
-      // Re-extract DOM from the (possibly new) page
       let domData: any = null;
-      try {
-        domData = await extractDomFromTab(tabId);
-      } catch (domErr: any) {
-        console.warn('[Agentic] DOM re-extraction failed after action:', domErr.message);
-        // Still send the action result even if DOM extraction fails
+
+      if (!skipDom) {
+        if (isNavAction || pageChanged) {
+          console.log('[Agentic] Navigation detected, waiting for page load...');
+          await waitForTabLoad(tabId, 10000);
+          await ensureContentScript(tabId);
+        } else {
+          await new Promise(r => setTimeout(r, 800));
+        }
+
+        try {
+          domData = await extractDomFromTab(tabId);
+        } catch (domErr: any) {
+          console.warn('[Agentic] DOM re-extraction failed after action:', domErr.message);
+        }
+      } else {
+        console.log('[Agentic] Cached DOM (non-mutating action:', action.action_type, ')');
       }
 
       sendToServer({

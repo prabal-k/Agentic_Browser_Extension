@@ -184,6 +184,134 @@ def _extract_urls_from_text(text: str) -> list[str]:
     return cleaned
 
 
+# Well-known sites where we can construct direct search URLs
+# This avoids 2-3 LLM calls (navigate → find search → type → submit)
+_KNOWN_SITES = {
+    "youtube": {
+        "patterns": ["youtube", "yt"],
+        "search_url": "https://www.youtube.com/results?search_query={query}",
+        "base_url": "https://www.youtube.com",
+        "verbs": ["search", "find", "watch", "play", "look for"],
+    },
+    "duckduckgo": {
+        "patterns": ["duckduckgo", "ddg"],
+        "search_url": "https://duckduckgo.com/?q={query}",
+        "base_url": "https://duckduckgo.com",
+        "verbs": ["search", "find", "look for", "look up"],
+    },
+    "amazon": {
+        "patterns": ["amazon"],
+        "search_url": "https://www.amazon.com/s?k={query}",
+        "base_url": "https://www.amazon.com",
+        "verbs": ["search", "find", "look for", "check price"],
+    },
+    "wikipedia": {
+        "patterns": ["wikipedia", "wiki"],
+        "search_url": "https://en.wikipedia.org/w/index.php?search={query}",
+        "base_url": "https://en.wikipedia.org",
+        "verbs": ["search", "find", "look up", "read about"],
+    },
+    "github": {
+        "patterns": ["github"],
+        "search_url": "https://github.com/search?q={query}",
+        "base_url": "https://github.com",
+        "verbs": ["search", "find", "look for"],
+    },
+    "daraz": {
+        "patterns": ["daraz"],
+        "search_url": "https://www.daraz.com.np/catalog/?q={query}",
+        "base_url": "https://www.daraz.com.np",
+        "verbs": ["search", "find", "check", "look for", "buy"],
+    },
+}
+
+
+def _build_direct_url(goal_text: str) -> str:
+    """Try to construct a direct search URL from a natural language goal.
+
+    Only works for well-known sites where the URL pattern is predictable.
+    Returns empty string if no match found.
+
+    Examples:
+        "search for iphones on youtube" → youtube.com/results?search_query=iphones
+        "find lenovo laptop price on daraz" → daraz.com.np/catalog/?q=lenovo+laptop
+        "go to github" → github.com (navigation only, no search)
+    """
+    text_lower = goal_text.lower()
+
+    # Find which site is mentioned — check the most specific pattern match
+    matched_site = None
+    for site_id, config in _KNOWN_SITES.items():
+        for pattern in config["patterns"]:
+            # Require word boundary match to avoid false positives
+            if re.search(rf'\b{re.escape(pattern)}\b', text_lower):
+                matched_site = (site_id, config)
+                break
+        if matched_site:
+            break
+
+    if not matched_site:
+        return ""
+
+    site_id, config = matched_site
+
+    # Check if there's a search verb — if so, extract the query
+    has_search_verb = any(v in text_lower for v in config["verbs"])
+    if not has_search_verb:
+        return config["base_url"]
+
+    # Extract search query: take text between the verb and the site name
+    # e.g., "search for 3 idiots trailer on youtube" → "3 idiots trailer"
+    query = ""
+
+    # Try to extract query between verb and site name
+    # Handles: "search for X on youtube", "find X on wikipedia", "play X on youtube"
+    for verb in sorted(config["verbs"], key=len, reverse=True):
+        for pattern in config["patterns"]:
+            # Pattern: "verb (for)? ... on/in/from site"
+            match = re.search(
+                rf'{re.escape(verb)}(?:\s+for)?\s+(.+?)\s+(?:on|in|from|at)\s+{re.escape(pattern)}',
+                text_lower
+            )
+            if match:
+                query = match.group(1).strip()
+                # Remove leading "the/a/an"
+                query = re.sub(r'^(the|a|an)\s+', '', query)
+                break
+        if query:
+            break
+
+    # Try alternate pattern: "check (the)? price of X on site"
+    if not query:
+        for pattern in config["patterns"]:
+            match = re.search(
+                rf'(?:check|find|get)\s+(?:the\s+)?price\s+of\s+(.+?)\s+(?:on|in|from|at)\s+{re.escape(pattern)}',
+                text_lower
+            )
+            if match:
+                query = match.group(1).strip()
+                break
+
+    # Fallback: remove the site name and verbs, take what's left
+    if not query:
+        query = text_lower
+        for prefix in ("search for", "search", "find", "look for", "look up",
+                       "watch", "play", "check the price of", "check price of",
+                       "read about", "buy"):
+            query = query.replace(prefix, "")
+        for p in config["patterns"]:
+            query = query.replace(p, "")
+        for word in ("on", "from", "at"):
+            query = re.sub(rf'\b{word}\b', '', query)
+        query = query.strip().strip(".,!?")
+
+    if query and len(query) > 2:
+        from urllib.parse import quote_plus
+        return config["search_url"].format(query=quote_plus(query))
+    else:
+        return config["base_url"]
+
+
 # ============================================================
 # Node 1: Analyze Goal + Create Plan (merged — single LLM call)
 # ============================================================
@@ -200,6 +328,13 @@ async def analyze_and_plan(state: AgentState) -> dict:
     # Extract URLs from the task text — code-level, no LLM needed
     extracted_urls = _extract_urls_from_text(goal_text)
     target_url = extracted_urls[0] if extracted_urls else ""
+
+    # If no explicit URL, try to construct one from well-known site + search query
+    # This saves 2-3 LLM calls (navigate → find search → type → submit)
+    if not target_url:
+        target_url = _build_direct_url(goal_text)
+        if target_url:
+            logger.info("direct_url_constructed", url=target_url)
 
     # Determine complexity heuristically
     word_count = len(goal_text.split())
@@ -234,17 +369,24 @@ async def analyze_and_plan(state: AgentState) -> dict:
         original_reasoning="Reactive mode — one step at a time",
     )
 
-    # Set initial reasoning — just context hints, not the task text itself
-    # (the task text is already passed in the ACTION_DECISION_PROMPT as {goal})
+    # If we have a target URL (from user text or direct URL construction),
+    # skip the LLM and auto-navigate — zero LLM calls for the first action
+    # If we have a target URL, store it so decide_action can auto-navigate
+    # without an LLM call (code-level fast path)
     reasoning = "First action — start working on the task."
-    if target_url:
-        reasoning = f"Target URL detected: {target_url}"
+    auto_nav_url = ""
+    if target_url and is_blank:
+        auto_nav_url = target_url
+        reasoning = f"Auto-navigating to: {target_url}"
+        logger.info("auto_navigate_queued", url=target_url)
 
     return {
         "goal": goal,
         "plan": plan,
         "cognitive_status": CognitiveStatus.DECIDING,
         "current_reasoning": reasoning,
+        "pending_user_input": auto_nav_url,  # Reuse this field for auto-navigate
+        "pending_input_field_type": "auto_navigate" if auto_nav_url else "",
     }
 
 
@@ -619,12 +761,101 @@ async def decide_action(state: AgentState) -> dict:
 
     This node uses the LLM with bound tools to select a specific
     browser action. The LLM must call exactly one tool function.
+
+    FAST PATH: If the user just provided input via interrupt (pending_user_input),
+    and there's a matching sensitive field on the page, auto-type it without an LLM call.
     """
     logger.info("decide_action")
 
     plan = state.get("plan", Plan())
     current_step = plan.current_step
     action_history = state.get("action_history", [])
+
+    # --- FAST PATH: Auto-navigate if URL was pre-constructed ---
+    pending_type = state.get("pending_input_field_type", "")
+    if pending_type == "auto_navigate":
+        nav_url = state.get("pending_user_input", "")
+        if nav_url:
+            logger.info("auto_navigate_executing", url=nav_url[:80])
+            action = Action(
+                action_id=f"act_{uuid.uuid4().hex[:8]}",
+                action_type=ActionType.NAVIGATE,
+                value=nav_url,
+                description=f"Navigate to {nav_url[:50]}",
+                confidence=1.0,
+                requires_confirmation=False,
+                risk_level="low",
+            )
+            return {
+                "current_action": action,
+                "cognitive_status": CognitiveStatus.EXECUTING,
+                "pending_user_input": "",
+                "pending_input_field_type": "",
+            }
+
+    # --- FAST PATH: Auto-type ALL stored credentials at once ---
+    # If the user provided credentials via interrupt, type them ALL into
+    # the matching fields using JavaScript — no LLM call needed.
+    # This fills email + password (or any combo) in a single action cycle.
+    stored_creds = state.get("_stored_credentials", {})
+    pending_input = state.get("pending_user_input", "")
+    pending_type = state.get("pending_input_field_type", "")
+
+    # Merge pending_input into stored_creds if not already there
+    if pending_input and pending_type and pending_type not in stored_creds:
+        stored_creds = dict(stored_creds)
+        stored_creds[pending_type] = pending_input
+
+    if stored_creds:
+        page_ctx = state.get("page_context")
+        if page_ctx:
+            _field_matchers = [
+                ("email", lambda t, n, p: t == "email" or "email" in n or "email" in p),
+                ("password", lambda t, n, p: t == "password" or "password" in n),
+                ("verification", lambda t, n, p: any(w in n or w in p for w in ("otp", "code", "verification", "token"))),
+                ("payment", lambda t, n, p: any(w in n or w in p for w in ("card", "cvv", "number"))),
+            ]
+
+            # Find the FIRST credential that has a matching field on the page
+            for field_type, matcher in _field_matchers:
+                value = stored_creds.get(field_type, "")
+                if not value:
+                    continue
+
+                for el in page_ctx.elements:
+                    attrs = el.attributes
+                    el_type = attrs.get("type", "").lower()
+                    el_name = attrs.get("name", "").lower()
+                    el_placeholder = attrs.get("placeholder", "").lower()
+
+                    if matcher(el_type, el_name, el_placeholder) and el.is_enabled:
+                        logger.info("auto_type_credential",
+                                    field_type=field_type,
+                                    element_id=el.element_id)
+
+                        action = Action(
+                            action_id=f"act_{uuid.uuid4().hex[:8]}",
+                            action_type=ActionType.CLEAR_AND_TYPE,
+                            element_id=el.element_id,
+                            value=value,
+                            description=f"Typing user-provided {field_type}",
+                            confidence=1.0,
+                            requires_confirmation=False,
+                            risk_level="low",
+                        )
+
+                        # Remove this credential — it's been used
+                        updated_creds = dict(stored_creds)
+                        updated_creds.pop(field_type, None)
+
+                        return {
+                            "current_action": action,
+                            "cognitive_status": CognitiveStatus.EXECUTING,
+                            "pending_user_input": "",
+                            "pending_input_field_type": "",
+                            "_stored_credentials": updated_creds,
+                        }
+                    break  # Only try first matching element per field type
 
     # Smart model routing: use fast model for simple actions, main model for complex
     from agent_core.config import settings as _settings
@@ -791,12 +1022,134 @@ async def decide_action(state: AgentState) -> dict:
         latest_traces = state.get("reasoning_traces", [])
         confidence = latest_traces[-1].confidence if latest_traces else 0.5
 
-        # Most browser actions are auto-confirmed. Only high-risk actions need user input.
-        # High-risk = actions that spend money, change credentials, or are irreversible
-        _high_risk_actions = {ActionType.EVALUATE_JS, ActionType.UPLOAD_FILE}
+        # Risk assessment: auto-confirm most actions, but require user confirmation
+        # for actions that involve money, credentials, or irreversible changes.
+        # This is CONTEXT-BASED, not just action-type-based.
+        _always_confirm_actions = {ActionType.EVALUATE_JS, ActionType.UPLOAD_FILE}
 
-        requires_confirmation = action_type in _high_risk_actions
-        risk_level = "high" if action_type in _high_risk_actions else "low"
+        requires_confirmation = action_type in _always_confirm_actions
+        risk_level = "low"
+
+        # Context-based risk: check if the element or action description suggests
+        # a high-stakes operation (payment, login, cart, order, delete, etc.)
+        if action_type in {ActionType.CLICK, ActionType.TYPE_TEXT, ActionType.CLEAR_AND_TYPE}:
+            # Check element text and description for high-risk signals
+            desc_lower = args.get("description", "").lower()
+            element_text = ""
+            eid = raw_eid if 'raw_eid' in dir() else args.get("element_id")
+            page_ctx = state.get("page_context")
+            if page_ctx and eid is not None:
+                for el in page_ctx.elements:
+                    if el.element_id == eid:
+                        element_text = (el.text or "").lower()
+                        break
+
+            combined_text = f"{desc_lower} {element_text}"
+
+            # High-risk patterns — generalized keywords, not site-specific
+            _payment_signals = (
+                "pay", "payment", "checkout", "purchase", "buy now", "place order",
+                "confirm order", "submit order", "complete purchase", "proceed to pay",
+            )
+            _auth_signals = (
+                "login", "log in", "sign in", "signin", "password", "credential",
+                "authenticate", "otp", "verification code",
+            )
+            _cart_signals = (
+                "add to cart", "add to bag", "add to basket", "remove from cart",
+                "update cart", "increase quantity", "decrease quantity",
+            )
+            _destructive_signals = (
+                "delete", "remove", "cancel order", "cancel subscription",
+                "deactivate", "close account", "unsubscribe",
+            )
+
+            is_payment = any(s in combined_text for s in _payment_signals)
+            is_auth = any(s in combined_text for s in _auth_signals)
+            is_cart = any(s in combined_text for s in _cart_signals)
+            is_destructive = any(s in combined_text for s in _destructive_signals)
+
+            # Check if typing into a sensitive field
+            is_sensitive_field = False
+            sensitive_field_type = ""
+            if page_ctx and eid is not None:
+                for el in page_ctx.elements:
+                    if el.element_id == eid:
+                        el_type = el.attributes.get("type", "").lower()
+                        el_name = el.attributes.get("name", "").lower()
+                        el_placeholder = el.attributes.get("placeholder", "").lower()
+                        el_label = f"{el_name} {el_placeholder} {el_type}"
+
+                        if el_type == "password" or "password" in el_name or "passwd" in el_name:
+                            is_sensitive_field = True
+                            sensitive_field_type = "password"
+                        elif el_type == "email" or "email" in el_name:
+                            # Email on a login/signup page = sensitive
+                            if is_auth or any(w in combined_text for w in ("sign", "login", "account", "register")):
+                                is_sensitive_field = True
+                                sensitive_field_type = "email"
+                        elif any(w in el_label for w in ("card", "cvv", "expir", "credit", "debit")):
+                            is_sensitive_field = True
+                            sensitive_field_type = "payment"
+                        elif any(w in el_label for w in ("otp", "verification", "code", "token", "pin")):
+                            is_sensitive_field = True
+                            sensitive_field_type = "verification"
+                        break
+
+            # If typing into a sensitive field, check if the user provided
+            # the value in their task text. If not, the agent is fabricating
+            # credentials — switch to ask_user instead.
+            # SKIP this check if we already have stored credentials waiting to be typed
+            # (the fast path at the top of decide_action handles those)
+            existing_creds = state.get("_stored_credentials", {})
+            if is_sensitive_field and action_type in {ActionType.TYPE_TEXT, ActionType.CLEAR_AND_TYPE} and not existing_creds:
+                typed_value = _extract_value(args) or ""
+                # Strip submit marker
+                typed_value = typed_value.replace("|SUBMIT", "").strip()
+                original_task = goal.original_text
+
+                # Check if the typed value was provided by the user — either in the
+                # original task text OR in a recent user response (via ask_user interrupt)
+                current_reasoning = state.get("current_reasoning", "")
+                user_provided = typed_value and (
+                    typed_value.lower() in original_task.lower()
+                    or typed_value.lower() in current_reasoning.lower()
+                )
+
+                if not user_provided and typed_value:
+                    # Agent is making up sensitive data — override to ask_user
+                    logger.info("sensitive_field_override",
+                                field_type=sensitive_field_type,
+                                fabricated_value=typed_value[:20] + "...",
+                                target_element=eid)
+
+                    action = Action(
+                        action_id=f"act_{uuid.uuid4().hex[:8]}",
+                        action_type=ActionType.DONE,
+                        value=f"I need your {sensitive_field_type} to continue. Please provide your {sensitive_field_type}.",
+                        description=f"Asking user for {sensitive_field_type}",
+                        risk_level="high",
+                        requires_confirmation=False,
+                    )
+                    return {
+                        "current_action": action,
+                        "cognitive_status": CognitiveStatus.ASKING_USER,
+                        # Store the field info so we can auto-type when user responds
+                        "pending_input_field_type": sensitive_field_type,
+                    }
+
+            if is_payment:
+                requires_confirmation = True
+                risk_level = "high"
+            elif is_auth or is_destructive:
+                requires_confirmation = True
+                risk_level = "high"
+            elif is_sensitive_field:
+                requires_confirmation = True
+                risk_level = "high"
+            elif is_cart:
+                requires_confirmation = True
+                risk_level = "medium"
 
         # Sanitize element_id — LLM sometimes returns a list [1] instead of int 1
         raw_eid = args.get("element_id") or args.get("source_element_id")
@@ -1130,9 +1483,9 @@ async def evaluate(state: AgentState) -> dict:
         evaluation = Evaluation(
             action_succeeded=eval_data.get("action_succeeded", False),
             goal_progress=eval_data.get("goal_progress") or "",
-            progress_percentage=eval_data.get("progress_percentage", 0.0),
+            progress_percentage=0.0,  # Removed from prompt — not used for decisions
             unexpected_results=eval_data.get("unexpected_results") or "",
-            next_action_suggestion=eval_data.get("next_action_suggestion") or "",
+            next_action_suggestion="",  # Removed from prompt — never used
             should_continue=eval_data.get("should_continue", True),
             should_re_plan=eval_data.get("should_re_plan", False),
             re_plan_reason=eval_data.get("re_plan_reason") or "",
@@ -1292,7 +1645,9 @@ async def self_critique_action(state: AgentState) -> dict:
             "should_terminate": True,
         }
 
-    # Detect duplicate/empty extractions: if last 2 extract actions returned same or empty content, force done
+    # --- Strategy Escalation ---
+    # When extraction fails repeatedly, escalate to a different strategy instead of giving up.
+    # Escalation ladder: read_page → scroll + read_page → visual_check → different site → report partial
     if len(action_history) >= 2:
         last_two = action_history[-2:]
         last_types = [e.get("action", {}).get("action_type", "") for e in last_two]
@@ -1304,39 +1659,96 @@ async def self_critique_action(state: AgentState) -> dict:
                 ext = entry.get("result", {}).get("extracted_data")
                 last_extracts.append(ext if isinstance(ext, str) else "")
 
-            # Both empty OR both same content → stop
             both_empty = all(len(e) < 5 for e in last_extracts)
             both_same = len(last_extracts) == 2 and last_extracts[0][:200] == last_extracts[1][:200] and len(last_extracts[0]) > 20
 
             if both_empty or both_same:
                 reason = "empty results" if both_empty else "same content"
-                logger.info("self_critique_duplicate_detected", msg=f"Last 2 extractions: {reason}")
 
-                # Count total extraction attempts to detect persistent failure
+                # Count extraction attempts to determine escalation level
                 extract_count = sum(
                     1 for e in action_history
                     if e.get("action", {}).get("action_type") in ("extract_text", "take_screenshot")
                 )
+                # Count visual_check attempts
+                visual_count = sum(
+                    1 for e in action_history
+                    if e.get("action", {}).get("action_type") == "take_screenshot"
+                    and "__VISUAL_CHECK__" in str(e.get("action", {}).get("value", ""))
+                )
+                # Count scroll attempts
+                scroll_count = sum(
+                    1 for e in action_history
+                    if e.get("action", {}).get("action_type") == "scroll_down"
+                )
 
-                # After 4+ extraction attempts with no new content, force-terminate
-                # This is a CODE-LEVEL enforcement — not a prompt suggestion
-                if extract_count >= 4:
-                    logger.info("self_critique_force_done", msg=f"Force-terminating after {extract_count} failed extractions")
+                logger.info("strategy_escalation",
+                            reason=reason,
+                            extract_count=extract_count,
+                            visual_count=visual_count,
+                            scroll_count=scroll_count)
+
+                # Level 1: First failure → suggest scroll then retry
+                if extract_count <= 2 and scroll_count < 2:
                     return {
-                        "cognitive_status": CognitiveStatus.COMPLETED,
-                        "should_terminate": True,
+                        "cognitive_status": CognitiveStatus.DECIDING,
+                        "retry_context": RetryContext(),
+                        "current_reasoning": (
+                            f"Text extraction returned {reason}. "
+                            "The content might be below the current viewport. "
+                            "Try scroll_down first, then read_page again."
+                        ),
                     }
 
-                # First time: give LLM one more chance with a strong hint
-                return {
-                    "cognitive_status": CognitiveStatus.DECIDING,
-                    "retry_context": RetryContext(),
-                    "current_reasoning": (
-                        f"EXTRACTION FAILED: Last 2 read_page calls returned {reason}. "
-                        "Try scrolling down first, then read_page again. "
-                        "Or call done() with what you already know from the page URL and element labels."
-                    ),
-                }
+                # Level 2: Scroll didn't help → try visual_check
+                if extract_count <= 4 and visual_count == 0:
+                    return {
+                        "cognitive_status": CognitiveStatus.DECIDING,
+                        "retry_context": RetryContext(),
+                        "current_reasoning": (
+                            f"Text extraction failed {extract_count} times ({reason}). "
+                            "The page content may be rendered as images or in a JavaScript framework. "
+                            "Use visual_check to see what's actually on screen."
+                        ),
+                    }
+
+                # Level 3: Visual check done → try different approach or report findings
+                memory = state.get("task_memory", TaskMemory())
+                has_any_findings = any(
+                    isinstance(v, str) and len(v) > 20 and not v.startswith("data:image")
+                    for v in memory.important_data.values()
+                )
+
+                if has_any_findings:
+                    # We have SOME findings — report what we have
+                    return {
+                        "cognitive_status": CognitiveStatus.DECIDING,
+                        "retry_context": RetryContext(),
+                        "current_reasoning": (
+                            "Multiple extraction strategies have been tried. "
+                            "You have gathered some findings already (check action history DATA entries). "
+                            "Call done(answer) with whatever information you've collected so far."
+                        ),
+                    }
+                else:
+                    # No findings at all — try navigating to a different source
+                    if extract_count <= 6:
+                        return {
+                            "cognitive_status": CognitiveStatus.DECIDING,
+                            "retry_context": RetryContext(),
+                            "current_reasoning": (
+                                "This page's content cannot be extracted by any method. "
+                                "Try navigating to a DIFFERENT website that might have the same information. "
+                                "Use go_back or navigate to a search engine and try another result."
+                            ),
+                        }
+                    else:
+                        # Absolute last resort — force complete
+                        logger.info("strategy_escalation_exhausted", msg="All strategies failed")
+                        return {
+                            "cognitive_status": CognitiveStatus.COMPLETED,
+                            "should_terminate": True,
+                        }
 
     # Detect stuck loop: 3+ actions with no URL change and same action type repeated
     if len(action_history) >= 3:
@@ -1418,6 +1830,48 @@ async def self_critique_action(state: AgentState) -> dict:
             "cognitive_status": CognitiveStatus.REASONING,
             "retry_context": RetryContext(),
         }
+
+    # --- Action Batching: auto-chain obvious follow-up actions ---
+    # After certain actions, the next step is predictable — skip the LLM call
+    last_action = state.get("current_action")
+    if last_action and evaluation.action_succeeded:
+        last_type = last_action.action_type
+
+        # After scroll_down → auto-read page (the user scrolled to see content)
+        if last_type in {ActionType.SCROLL_DOWN, ActionType.SCROLL_UP}:
+            # Only auto-read if:
+            # 1. The task involves information gathering (agent has read before)
+            # 2. The last read didn't return duplicate/empty content
+            has_read_before = any(
+                e.get("action", {}).get("action_type") == "extract_text"
+                for e in action_history
+            )
+            # Check if last 2 reads returned same content (don't auto-read if stuck)
+            last_extracts = [
+                e.get("result", {}).get("extracted_data", "")
+                for e in action_history
+                if e.get("action", {}).get("action_type") == "extract_text"
+            ]
+            is_duplicate = (
+                len(last_extracts) >= 2
+                and last_extracts[-1][:200] == last_extracts[-2][:200]
+                and len(last_extracts[-1]) > 10
+            )
+            if has_read_before and not is_duplicate:
+                logger.info("action_batch", batch="scroll+read_page")
+                auto_action = Action(
+                    action_id=f"act_{uuid.uuid4().hex[:8]}",
+                    action_type=ActionType.EXTRACT_TEXT,
+                    value="__READ_PAGE__",
+                    description="Auto-read after scroll",
+                    confidence=1.0,
+                    requires_confirmation=False,
+                    risk_level="low",
+                )
+                return {
+                    "current_action": auto_action,
+                    "cognitive_status": CognitiveStatus.EXECUTING,
+                }
 
     # Standard path: skip reason, go directly to decide_action
     goal = state.get("goal", Goal(original_text=""))

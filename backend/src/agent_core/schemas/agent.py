@@ -484,6 +484,9 @@ class AgentState(TypedDict, total=False):
     error: str | None  # Current error, if any
     should_terminate: bool  # Whether the agent should stop
     task_summary: str  # Final summary with findings (set by finalize node)
+    pending_user_input: str  # User-provided value from interrupt (credentials, OTP, etc.)
+    pending_input_field_type: str  # What kind of field the input is for (email, password, etc.)
+    _stored_credentials: dict  # Parsed credentials from user (email, password) for auto-typing
 
     # ---- Configuration ----
     model_name: str  # Which LLM model to use
@@ -554,6 +557,9 @@ def create_initial_state(
         error=None,
         should_terminate=False,
         task_summary="",
+        pending_user_input="",
+        pending_input_field_type="",
+        _stored_credentials={},
 
         # Configuration
         model_name=model_name,

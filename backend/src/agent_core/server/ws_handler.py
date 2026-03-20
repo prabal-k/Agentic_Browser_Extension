@@ -535,19 +535,35 @@ async def _handle_interrupt(
                        session_id=session.session_id)
 
     elif "action_id" in interrupt_data and "confidence" in interrupt_data:
-        # Action confirmation
+        # Action confirmation — provide context about WHY confirmation is needed
         risk = interrupt_data.get("risk_level", "low")
         urgency = "warning" if risk in ("medium", "high") else "normal"
+
+        # Descriptive title based on risk
+        title = "Confirm Action"
+        if risk == "high":
+            desc = interrupt_data.get("description", "").lower()
+            if any(w in desc for w in ("pay", "purchase", "checkout", "order")):
+                title = "Payment Confirmation Required"
+            elif any(w in desc for w in ("login", "sign in", "password")):
+                title = "Login Credentials Required"
+            elif any(w in desc for w in ("delete", "remove", "cancel")):
+                title = "Destructive Action — Confirm"
+            else:
+                title = "High-Risk Action — Confirm"
+        elif risk == "medium":
+            title = "Confirm Cart Action"
+
         await send_msg(ws, "server_interrupt",
                        interrupt_id=interrupt_id,
-                       title="Confirm Action",
+                       title=title,
                        context=interrupt_data.get("description", ""),
                        fields=[{
                            "field_id": "confirmed",
                            "field_type": "confirm",
                            "label": f"{interrupt_data.get('action_type', 'action')} on element {interrupt_data.get('element_id', '?')}",
                            "description": interrupt_data.get("reasoning", ""),
-                           "options": ["Yes, execute", "No, skip"],
+                           "options": ["Yes, proceed", "No, skip"],
                        }],
                        urgency=urgency,
                        session_id=session.session_id)
