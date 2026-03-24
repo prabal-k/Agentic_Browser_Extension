@@ -49,44 +49,18 @@ def click(element_id: int, description: str = "") -> Action:
 
 @tool
 def type_text(element_id: int, text: str, submit: bool = False, description: str = "") -> Action:
-    """Type text into an input field or textarea WITHOUT clearing existing content.
+    """Type text into an input field. Clears existing content first.
 
-    USE WHEN: You need to append text to an input that may already have content,
-    or type into an empty field.
+    USE WHEN: You need to type into any input — search bars, login forms,
+    text fields, address inputs, etc.
 
-    IMPORTANT: For search bars or forms, set submit=True to press Enter after typing.
-    If you just type without submit=True, the text stays in the field but nothing happens.
+    Set submit=True to press Enter after typing (for search bars and forms).
 
     Args:
         element_id: The numeric ID of the input element
         text: The text to type
-        submit: If True, press Enter after typing to submit the form/search
+        submit: If True, press Enter after typing
         description: Why you are typing this text
-    """
-    value = f"{text}|SUBMIT" if submit else text
-    return Action(
-        action_type=ActionType.TYPE_TEXT,
-        element_id=element_id,
-        value=value,
-        description=description,
-        risk_level="low",
-    )
-
-
-@tool
-def clear_and_type(element_id: int, text: str, submit: bool = False, description: str = "") -> Action:
-    """Clear an input field and type new text.
-
-    USE WHEN: You need to replace existing content in a field,
-    or ensure the field contains exactly your text.
-
-    IMPORTANT: For search bars or forms, set submit=True to press Enter after typing.
-
-    Args:
-        element_id: The numeric ID of the input element
-        text: The text to type after clearing
-        submit: If True, press Enter after typing to submit the form/search
-        description: Why you are replacing the field content
     """
     value = f"{text}|SUBMIT" if submit else text
     return Action(
@@ -456,6 +430,32 @@ def extract_table(element_id: int, description: str = "") -> Action:
 
 
 @tool
+def extract_listings(description: str = "") -> Action:
+    """Extract structured data from product listings, search results, or any repeated card/grid layout.
+
+    USE WHEN: The page has a grid or list of items (products, search results,
+    articles, job postings, etc.) and you need structured data like:
+    name, price, image URL, product URL, rating, description.
+
+    Works on ANY website — auto-detects repeated card structures in the DOM.
+    Returns JSON array of items with all available fields.
+
+    Use this INSTEAD OF read_page when you need structured data from listings.
+
+    Args:
+        description: What kind of items to extract (e.g. "Lenovo laptops with prices")
+    """
+    return Action(
+        action_type=ActionType.EXTRACT_TEXT,
+        value="__EXTRACT_LISTINGS__",
+        description=description or "Extracting structured listing data",
+        risk_level="low",
+        is_reversible=True,
+        requires_confirmation=False,
+    )
+
+
+@tool
 def take_screenshot(description: str = "") -> Action:
     """Take a screenshot of the current page.
 
@@ -756,7 +756,7 @@ def fill_form(fields: str, submit: bool = True, description: str = "") -> Action
         description: What form you are filling and why.
     """
     return Action(
-        action_type=ActionType.TYPE_TEXT,
+        action_type=ActionType.CLEAR_AND_TYPE,
         value=f"__FILL_FORM__|{fields}|{'SUBMIT' if submit else 'NO_SUBMIT'}",
         description=description or "Fill form fields",
         risk_level="medium",
@@ -815,7 +815,6 @@ BROWSER_TOOLS = [
     # Element interactions
     click,
     type_text,
-    clear_and_type,
     select_option,
     hover,
     check,
@@ -839,6 +838,7 @@ BROWSER_TOOLS = [
     # Information gathering
     extract_text,
     extract_table,
+    extract_listings,
     read_page,
     visual_check,
     take_screenshot,
@@ -865,12 +865,12 @@ BROWSER_TOOLS = [
 # Tool groups for dynamic selection — core is always included
 # Design: core has everything needed for 80% of tasks (11 tools)
 TOOL_GROUPS = {
-    "core": [click, type_text, clear_and_type, navigate, go_back, scroll_down,
+    "core": [click, type_text, navigate, go_back, scroll_down,
              press_key, read_page, visual_check, extract_text, wait, ask_user, done],
     "search": [select_option, scroll_up, scroll_to_element, key_combo],
     "tabs": [new_tab, close_tab, switch_tab],
     "forms": [check, uncheck, hover, upload_file],
-    "data": [extract_table, evaluate_js],
+    "data": [extract_table, extract_listings, evaluate_js],
     "advanced": [drag, handle_dialog, go_forward, refresh],
     "waiting": [wait_for_selector, wait_for_navigation],
     # monitoring removed from groups — stubs that return empty data

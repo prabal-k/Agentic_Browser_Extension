@@ -259,6 +259,36 @@ body {
   font-weight: 600;
 }
 
+/* Export Download Bar */
+.export-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.export-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.export-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.export-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* Streaming Bubble (live token output) */
 .msg.streaming {
   align-self: flex-start;

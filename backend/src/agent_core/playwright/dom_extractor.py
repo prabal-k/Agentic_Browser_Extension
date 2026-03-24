@@ -136,7 +136,7 @@ _EXTRACT_JS = """
             // Get relevant attributes
             const attrs = {};
             for (const name of ['type', 'name', 'placeholder', 'aria-label', 'href',
-                                 'role', 'title', 'alt', 'value', 'action', 'method']) {
+                                 'role', 'title', 'alt', 'value', 'action', 'method', 'src']) {
                 const val = el.getAttribute(name);
                 if (val) attrs[name] = val;
             }
@@ -197,6 +197,14 @@ _EXTRACT_JS = """
                 }
             }
 
+            // Compute depth relative to document.body
+            let depth = 0;
+            let ancestor = el.parentElement;
+            while (ancestor && ancestor !== document.body) {
+                depth++;
+                ancestor = ancestor.parentElement;
+            }
+
             elements.push({
                 tag_name: el.tagName.toLowerCase(),
                 text: text,
@@ -213,6 +221,8 @@ _EXTRACT_JS = """
                 parent_context: parentContext,
                 children_count: el.querySelectorAll('a, button, input, textarea, select').length,
                 css_selector: cssSelector,
+                is_leaf: el.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"]').length === 0,
+                depth: depth,
             });
         }
 
@@ -327,6 +337,8 @@ async def extract_page_context(page: Page, max_elements: int = 200) -> PageConte
             parent_context=el_data.get("parent_context", ""),
             children_count=el_data.get("children_count", 0),
             css_selector=el_data.get("css_selector", ""),
+            is_leaf=el_data.get("is_leaf", True),
+            depth=el_data.get("depth", 0),
         ))
 
     # Map form field_ids (forms reference element positions, not IDs)

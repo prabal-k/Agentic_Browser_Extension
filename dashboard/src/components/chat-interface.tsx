@@ -78,8 +78,17 @@ function EvalDisplay({ evaluation }: { evaluation: NonNullable<ChatMessage["meta
   );
 }
 
-function DoneDisplay({ done }: { done: NonNullable<ChatMessage["metadata"]>["done"] }) {
+function DoneDisplay({ done, exportInfo }: {
+  done: NonNullable<ChatMessage["metadata"]>["done"];
+  exportInfo?: { available: boolean; id: string; formats: string[]; items: number };
+}) {
   if (!done) return null;
+
+  const handleExport = (format: string) => {
+    const baseUrl = window.location.origin.replace(':3000', ':8001');
+    window.open(`${baseUrl}/api/export/${exportInfo?.id}?format=${format}`, '_blank');
+  };
+
   return (
     <div className={cn(
       "mt-2 rounded p-3 text-sm border",
@@ -91,6 +100,20 @@ function DoneDisplay({ done }: { done: NonNullable<ChatMessage["metadata"]>["don
       <p className="text-xs mt-1 opacity-80">
         {done.steps} steps completed, {done.actions} actions executed
       </p>
+      {exportInfo?.available && (
+        <div className="mt-2 pt-2 border-t border-gray-700 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">Download ({exportInfo.items} items):</span>
+          {["json", "csv", "xlsx", "pdf"].map((fmt) => (
+            <button
+              key={fmt}
+              onClick={() => handleExport(fmt)}
+              className="text-xs px-2 py-1 rounded border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors"
+            >
+              {fmt === "xlsx" ? "Excel" : fmt.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -132,7 +155,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         {meta?.plan && <PlanDisplay steps={meta.plan} />}
         {meta?.action && <ActionDisplay action={meta.action} />}
         {meta?.evaluation && <EvalDisplay evaluation={meta.evaluation} />}
-        {meta?.done && <DoneDisplay done={meta.done} />}
+        {meta?.done && <DoneDisplay done={meta.done} exportInfo={meta.export} />}
       </div>
     </div>
   );

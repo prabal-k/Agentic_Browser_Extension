@@ -94,7 +94,7 @@ Rules:
 
 Respond only with valid JSON."""
 
-SYSTEM_REASONING = """Analyze the page. Adapt if it doesn't match expectations. Handle popups/CAPTCHAs first. Respond only with valid JSON."""
+SYSTEM_REASONING = """Analyze the page. Adapt if it doesn't match expectations. Handle modals/popups/dialogs/overlays/CAPTCHAs FIRST before anything else — pick a reasonable option to proceed. Respond only with valid JSON."""
 
 SYSTEM_ACTION_DECISION = """Browser agent. Call exactly one tool. Be decisive, not verbose.
 
@@ -102,9 +102,12 @@ Rules:
 - Pick the best element_id. After typing, set submit=True for search fields.
 - Don't repeat failed actions. Move to the next step when current one succeeds.
 - read_page = DOM text. visual_check = screenshot to vision AI. Use visual_check for images.
-- done(summary): include actual findings/answer, not just "task completed".
+- extract_listings = structured JSON from product grids/search results/cards. Use when you need prices, names, URLs, images from listing pages instead of raw text.
+- done(summary): include actual findings/answer, not just "task completed". NEVER call done() without first gathering data using read_page, extract_listings, or extract_text.
 - Never use ask_user unless you need a password or personal info not on the page.
-- Keep description SHORT (under 15 words)."""
+- Keep description SHORT (under 15 words).
+- MODALS/DIALOGS/OVERLAYS: If the page has a modal, popup, dialog, overlay, or toast blocking the main content, handle it FIRST before doing anything else. Pick a reasonable option (select first/default item, accept, confirm, dismiss) that lets you proceed. Do NOT try to interact with elements behind a modal — they will timeout.
+- STUCK NAVIGATION: If clicking a nav link/button 2+ times hasn't changed the page, STOP clicking it. Instead: use navigate() to go to the URL directly (construct it from the link text, e.g. /routes, /settings, /dashboard), or try a different element that serves the same purpose."""
 
 SYSTEM_EVALUATION = """Evaluate the last browser action. Be brief. Respond only with valid JSON."""
 
@@ -296,52 +299,19 @@ Respond with your critique in this exact JSON format:
 # Reasoning Prompt (ReAct + Chain of Thought)
 # ============================================================
 
-REASONING_PROMPT = """Analyze the current page and decide the next action using ReAct (Reason + Act):
+REASONING_PROMPT = """Analyze the page situation and what to do next. Be brief.
 
-1. **Thought**: What is the current situation?
-   - What page am I on? (check URL and title)
-   - Does this page match what the plan expected?
-   - Are there unexpected elements? (cookie banners, popups, login walls, CAPTCHAs, error messages)
-   - If the page is different from what was planned, I need to ADAPT — not blindly follow the plan.
+Goal: {goal}
+Step: {current_step_number} - {current_step_description}
+Expected: {expected_outcome}
 
-2. **Observation**: What elements are relevant?
-   - Which interactive elements match the current step?
-   - If the expected element doesn't exist, what SIMILAR element could work?
-   - Are there blocking elements (modals, overlays) that must be handled first?
+Page: {page_context}
+History: {action_history}
+Retry: {retry_context}
 
-3. **Conclusion**: What specific action should I take?
-   - Which element_id, and why?
-   - If no element matches the plan step, should I suggest re-planning?
-   - How confident am I? (0.9+ = clearly right element, 0.6-0.8 = reasonable guess, <0.5 = uncertain)
-
-## Current Goal:
-{goal}
-
-## Current Plan:
-{plan}
-
-## Current Step:
-Step {current_step_number}: {current_step_description}
-Expected outcome: {expected_outcome}
-
-## Current Page Context:
-{page_context}
-
-## Action History:
-{action_history}
-
-## Retry Context (if retrying):
-{retry_context}
-
-## Task Memory:
-{task_memory}
-
-Respond with your reasoning in this exact JSON format:
+JSON only:
 {{
-    "thought": "Your chain-of-thought analysis of the current situation",
-    "observation": "What you see on the page relevant to the current step",
-    "conclusion": "What action should be taken and why",
-    "target_element_id": null or element_id_number,
+    "thought": "Current situation + what elements are relevant (combine analysis and observation)",
     "confidence": 0.0 to 1.0,
     "needs_re_plan": false,
     "re_plan_reason": "",
@@ -362,6 +332,7 @@ Page: {page_context}
 
 History: {action_history}
 
+{output_format_hint}
 Pick ONE action. Short description (under 15 words). Call the tool now."""
 
 
@@ -378,6 +349,7 @@ Goal: {goal}
 
 Did the action work? Is the page what we expected? Any unexpected popups/errors/redirects?
 Set replan=true if page is completely wrong (CAPTCHA, login wall, error page).
+If a modal/dialog/overlay appeared (workspace selector, cookie consent, onboarding, etc.), that's normal — NOT a failure. The next action should handle the modal.
 
 JSON only:
 {{
@@ -418,7 +390,7 @@ DO NOT repeat the same approach that already failed.
 2. Scroll to find the element if it's not visible
 3. Wait for dynamic content to load
 4. Use keyboard navigation instead of clicking
-5. Navigate to the page first if we're on the wrong page
+5. Use navigate() to go directly to the target URL — construct it from the current domain + path segment (e.g. if clicking "My Routes" fails on example.com, try navigate("https://example.com/routes") or similar)
 6. Ask the user for help if you're stuck
 
 Choose a NEW strategy and explain your reasoning.
@@ -601,3 +573,46 @@ def format_task_memory(memory: dict) -> str:
         for k, v in memory["user_preferences"].items():
             lines.append(f"  - {k}: {v}")
     return "\n".join(lines) if lines else "No observations yet."
+
+
+# ============================================================
+# Response Templates for Common Tasks
+# ============================================================
+
+RESPONSE_TEMPLATES = {
+    "price_check": {
+        "patterns": ["price of", "cost of", "how much", "cheapest", "most expensive", "compare price",
+                     "prices in", "price in", "price list"],
+        "output_hint": "When calling done(), format findings as structured data: Product | Price | Source URL. List each item on a new line.",
+        "structured_keys": ["product", "price", "source_url", "currency"],
+    },
+    "product_search": {
+        "patterns": ["find product", "search for", "looking for", "best laptop", "top rated", "recommend"],
+        "output_hint": "When calling done(), list each result: Name - Price - Key Detail - URL.",
+        "structured_keys": ["name", "price", "url", "rating", "key_detail"],
+    },
+    "info_lookup": {
+        "patterns": ["check if", "is there", "does it have", "verify that", "find out if", "what is the"],
+        "output_hint": "When calling done(), answer: Yes/No + Evidence + Source URL.",
+        "structured_keys": ["answer", "evidence", "source_url"],
+    },
+    "data_extraction": {
+        "patterns": ["extract all", "scrape", "list all", "get all", "collect all", "structured output",
+                     "json", "in excel", "in csv", "in pdf", "download", "excel file"],
+        "output_hint": "When calling done(), use extract_listings tool first if available, then provide structured JSON data.",
+        "structured_keys": ["items"],
+    },
+}
+
+
+def detect_task_pattern(goal_text: str) -> dict | None:
+    """Detect which response template matches the goal text.
+
+    Returns a dict with 'name', 'patterns', 'output_hint', 'structured_keys'
+    if a match is found, or None if no pattern matches.
+    """
+    goal_lower = goal_text.lower()
+    for name, template in RESPONSE_TEMPLATES.items():
+        if any(p in goal_lower for p in template["patterns"]):
+            return {"name": name, **template}
+    return None

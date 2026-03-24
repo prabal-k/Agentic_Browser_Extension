@@ -260,6 +260,7 @@ export default defineBackground(() => {
 
   async function extractDomFromTab(tabId: number): Promise<any> {
     await ensureContentScript(tabId);
+    // The content script now handles SPA hydration waiting internally
     const result = await chrome.tabs.sendMessage(tabId, { type: 'extract_dom' });
     if (!result?.success) throw new Error('DOM extraction returned empty result');
     return result.data;

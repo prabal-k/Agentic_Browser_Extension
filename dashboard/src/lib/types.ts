@@ -167,6 +167,7 @@ export interface ChatMessage {
     evaluation?: { succeeded: boolean; progress: number; summary: string };
     interrupt?: { id: string; title: string; fields: InterruptField[]; urgency: string };
     done?: { success: boolean; summary: string; steps: number; actions: number };
+    export?: { available: boolean; id: string; formats: string[]; items: number };
     error?: { message: string; recoverable: boolean };
   };
 }

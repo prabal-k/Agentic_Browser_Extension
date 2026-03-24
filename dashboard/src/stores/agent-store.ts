@@ -212,6 +212,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
               steps: msg.steps_completed,
               actions: msg.total_actions,
             },
+            export: msg.export_available ? {
+              available: true,
+              id: msg.export_id,
+              formats: msg.export_formats,
+              items: msg.export_items,
+            } : undefined,
           },
         });
         break;

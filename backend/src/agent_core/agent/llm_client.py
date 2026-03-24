@@ -179,6 +179,7 @@ def select_tools_for_context(
     current_step: str = "",
     action_history: list | None = None,
     max_tools: int = 18,
+    goal_text: str = "",
 ) -> list:
     """Select relevant tool groups based on current context.
 
@@ -210,9 +211,13 @@ def select_tools_for_context(
         if has_forms:
             _add_group("forms")
 
-    # Check step description for keywords
+    # Check step description AND goal text for keywords
     step_lower = current_step.lower()
-    if any(kw in step_lower for kw in ("extract", "read", "get", "scrape", "data", "text")):
+    goal_lower = goal_text.lower()
+    context_text = step_lower + " " + goal_lower
+    if any(kw in context_text for kw in ("extract", "read", "get", "scrape", "data", "text",
+                                          "price", "product", "listing", "item", "result",
+                                          "compare", "find", "check", "json", "structured")):
         _add_group("data")
     if any(kw in step_lower for kw in ("tab", "new tab", "switch")):
         _add_group("tabs")
@@ -239,12 +244,14 @@ def get_action_llm_dynamic(
     page_context=None,
     current_step: str = "",
     action_history: list | None = None,
+    goal_text: str = "",
 ) -> BaseChatModel:
     """Get LLM with dynamically selected tools based on context.
 
     Replaces static get_action_llm when context-aware tool selection is desired.
     """
-    tools = select_tools_for_context(page_context, current_step, action_history)
+    tools = select_tools_for_context(page_context, current_step, action_history,
+                                     goal_text=goal_text)
 
     return get_llm(
         model_name=model_name,

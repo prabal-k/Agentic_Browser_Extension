@@ -717,10 +717,40 @@ async def _send_done(ws: WebSocket, session: Session, final_values: dict) -> Non
     if task_summary:
         summary = task_summary
 
+    # Auto-detect exportable data and store for download
+    export_info = {}
+    try:
+        from agent_core.export.detector import detect_exportable_data
+        from agent_core.export.store import export_store
+
+        export_result = detect_exportable_data(final_values)
+        if export_result:
+            export_id = export_store.store(
+                session_id=session.session_id,
+                data=export_result["data"],
+                metadata={
+                    "goal": getattr(final_values.get("goal"), "original_text", ""),
+                    "source": export_result["source"],
+                },
+            )
+            export_info = {
+                "export_available": True,
+                "export_id": export_id,
+                "export_formats": ["json", "csv", "xlsx", "pdf"],
+                "export_items": len(export_result["data"]),
+            }
+            logger.info("export_data_stored",
+                        export_id=export_id,
+                        items=len(export_result["data"]),
+                        source=export_result["source"])
+    except Exception as e:
+        logger.warning("export_detection_failed", error=str(e))
+
     await send_msg(ws, "server_done",
                    success=success,
                    summary=summary,
                    steps_completed=steps_completed,
                    steps_total=steps_total,
                    total_actions=session.action_count,
-                   session_id=session.session_id)
+                   session_id=session.session_id,
+                   **export_info)

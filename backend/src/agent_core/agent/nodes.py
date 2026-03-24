@@ -68,6 +68,7 @@ from agent_core.agent.prompts import (
     format_plan_for_prompt,
     format_retry_context,
     format_task_memory,
+    detect_task_pattern,
 )
 from agent_core.agent.llm_client import get_reasoning_llm, get_action_llm, get_action_llm_dynamic
 
@@ -668,20 +669,16 @@ async def reason(state: AgentState) -> dict:
     if state.get("page_context"):
         page_context_str = state["page_context"].to_llm_representation()
 
-    plan_str = format_plan_for_prompt(_safe_serialize(plan))
     retry_str = format_retry_context(_safe_serialize(state.get("retry_context", RetryContext())))
-    memory_str = format_task_memory(_safe_serialize(state.get("task_memory", TaskMemory())))
 
     prompt = REASONING_PROMPT.format(
         goal=state["goal"].interpreted_goal,
-        plan=plan_str,
         current_step_number=current_step.step_id if current_step else "N/A",
         current_step_description=current_step.description if current_step else "No current step",
         expected_outcome=current_step.expected_outcome if current_step else "N/A",
         page_context=page_context_str or "No page loaded.",
-        action_history=format_action_history(state.get("action_history", [])),
+        action_history=format_action_history(state.get("action_history", []), max_entries=5),
         retry_context=retry_str,
-        task_memory=memory_str,
     )
 
     response = await llm.ainvoke([
@@ -694,8 +691,8 @@ async def reason(state: AgentState) -> dict:
         trace = ReasoningTrace(
             step_number=iteration,
             thought=reasoning_data.get("thought", ""),
-            observation=reasoning_data.get("observation", ""),
-            conclusion=reasoning_data.get("conclusion", ""),
+            observation="",  # Merged into thought
+            conclusion="",   # Removed — decide_action handles this
             confidence=reasoning_data.get("confidence", 0.5),
         )
         needs_clarification = reasoning_data.get("needs_clarification", False)
@@ -719,6 +716,12 @@ async def reason(state: AgentState) -> dict:
     next_status = CognitiveStatus.DECIDING
     if needs_clarification:
         next_status = CognitiveStatus.ASKING_USER
+    elif needs_re_plan and state.get("plan", Plan()).plan_version >= 2:
+        # Already re-planned at least once — don't keep re-planning.
+        # In reactive mode, just adapt the next action instead.
+        logger.info("reason_replan_suppressed",
+                    msg="Suppressing re-plan, already v2+. Proceeding to decide.")
+        next_status = CognitiveStatus.DECIDING
     elif needs_re_plan:
         # Reasoning detected page doesn't match plan — trigger re-plan
         next_status = CognitiveStatus.RE_PLANNING
@@ -899,12 +902,15 @@ async def decide_action(state: AgentState) -> dict:
             logger.info("smart_model_routing", model="main", reason="complex_decision")
 
     # Use dynamic tool selection based on context
+    goal = state.get("goal", Goal(original_text=""))
+
     llm = get_action_llm_dynamic(
         model_name=model_name,
         api_keys=state.get("api_keys"),
         page_context=state.get("page_context"),
         current_step=current_step.description if current_step else "",
         action_history=action_history,
+        goal_text=goal.original_text,
     )
 
     page_context_str = ""
@@ -912,16 +918,20 @@ async def decide_action(state: AgentState) -> dict:
         page_context_str = state["page_context"].to_llm_representation()
 
     latest_reasoning = state.get("current_reasoning", "")
-    goal = state.get("goal", Goal(original_text=""))
 
     # Pass the ORIGINAL task text — never the rewritten version
     original_task = goal.original_text
+
+    # Detect response template for structured output hints
+    template = detect_task_pattern(goal.original_text)
+    output_hint = template["output_hint"] if template else ""
 
     prompt = ACTION_DECISION_PROMPT.format(
         goal=original_task,
         reasoning=latest_reasoning or "First action — start working on the task.",
         page_context=page_context_str or "No page loaded.",
         action_history=format_action_history(action_history, max_entries=5),
+        output_format_hint=f"\n{output_hint}\n" if output_hint else "",
     )
 
     response = await llm.ainvoke([
@@ -943,7 +953,7 @@ async def decide_action(state: AgentState) -> dict:
         tool_to_action = {
             # Element interactions
             "click": ActionType.CLICK,
-            "type_text": ActionType.TYPE_TEXT,
+            "type_text": ActionType.CLEAR_AND_TYPE,
             "clear_and_type": ActionType.CLEAR_AND_TYPE,
             "select_option": ActionType.SELECT_OPTION,
             "hover": ActionType.HOVER,
@@ -970,6 +980,7 @@ async def decide_action(state: AgentState) -> dict:
             "read_page": ActionType.EXTRACT_TEXT,
             "visual_check": ActionType.TAKE_SCREENSHOT,
             "extract_table": ActionType.EXTRACT_TABLE,
+            "extract_listings": ActionType.EXTRACT_TEXT,
             "take_screenshot": ActionType.TAKE_SCREENSHOT,
             # Monitoring
             "get_console_logs": ActionType.GET_CONSOLE_LOGS,
@@ -996,6 +1007,7 @@ async def decide_action(state: AgentState) -> dict:
         _tool_aliases = {
             "take_screenshot": "visual_check",  # take_screenshot removed, use visual_check
             "fill": "type_text",                # some models call "fill" instead of "type_text"
+            "clear_and_type": "type_text",      # merged into type_text (always clears first)
         }
         if tool_name in _tool_aliases:
             logger.info("tool_alias_applied", original=tool_name, mapped=_tool_aliases[tool_name])
@@ -1011,12 +1023,43 @@ async def decide_action(state: AgentState) -> dict:
             args["value"] = f"__VISUAL_CHECK__|{desc}"
 
         # For read_page, inject the __READ_PAGE__ marker
+        # BUT: if the goal asks for structured/exportable data, use extract_listings instead
         if tool_name == "read_page":
-            args["value"] = "__READ_PAGE__"
+            template = detect_task_pattern(goal.original_text)
+            if template and template["name"] in ("data_extraction", "price_check"):
+                logger.info("read_page_to_extract_listings",
+                            msg="Goal requires structured data — upgrading read_page to extract_listings")
+                tool_name = "extract_listings"
+                action_type = ActionType.EXTRACT_TEXT
+                args["value"] = "__EXTRACT_LISTINGS__"
+            else:
+                args["value"] = "__READ_PAGE__"
+
+        # For extract_listings, inject the __EXTRACT_LISTINGS__ marker
+        if tool_name == "extract_listings":
+            args["value"] = "__EXTRACT_LISTINGS__"
 
         # Determine if this is a "done" or "ask_user" action
         is_done = tool_call["name"] == "done"
         is_ask = tool_call["name"] == "ask_user"
+
+        # Guard: don't allow done() on first action if task requires data gathering.
+        # The LLM sometimes calls done() immediately without extracting any data.
+        # Only block if NO data-gathering action has been performed yet.
+        has_gathered_data = any(
+            e.get("action", {}).get("action_type") in ("extract_text", "read_page", "take_screenshot")
+            for e in action_history
+        )
+        if is_done and not has_gathered_data:
+            template = detect_task_pattern(goal.original_text)
+            if template:
+                logger.info("premature_done_blocked",
+                            pattern=template["name"],
+                            msg="Blocked done() before data gathering — using extract_listings instead")
+                tool_name = "extract_listings"
+                action_type = ActionType.EXTRACT_TEXT
+                args = {"value": "__EXTRACT_LISTINGS__", "description": f"Extract {template['name']} data"}
+                is_done = False
 
         # Determine risk level and confirmation requirement
         latest_traces = state.get("reasoning_traces", [])
@@ -1032,7 +1075,7 @@ async def decide_action(state: AgentState) -> dict:
 
         # Context-based risk: check if the element or action description suggests
         # a high-stakes operation (payment, login, cart, order, delete, etc.)
-        if action_type in {ActionType.CLICK, ActionType.TYPE_TEXT, ActionType.CLEAR_AND_TYPE}:
+        if action_type in {ActionType.CLICK, ActionType.CLEAR_AND_TYPE}:
             # Check element text and description for high-risk signals
             desc_lower = args.get("description", "").lower()
             element_text = ""
@@ -1044,30 +1087,27 @@ async def decide_action(state: AgentState) -> dict:
                         element_text = (el.text or "").lower()
                         break
 
-            combined_text = f"{desc_lower} {element_text}"
-
-            # High-risk patterns — generalized keywords, not site-specific
+            # Check ELEMENT TEXT only for risk signals — not the description
+            # (description contains agent reasoning which may mention "sign in" for non-auth clicks)
             _payment_signals = (
                 "pay", "payment", "checkout", "purchase", "buy now", "place order",
                 "confirm order", "submit order", "complete purchase", "proceed to pay",
             )
             _auth_signals = (
-                "login", "log in", "sign in", "signin", "password", "credential",
-                "authenticate", "otp", "verification code",
+                "login", "log in", "sign in", "signin",
             )
             _cart_signals = (
-                "add to cart", "add to bag", "add to basket", "remove from cart",
-                "update cart", "increase quantity", "decrease quantity",
+                "add to cart", "add to bag", "add to basket",
             )
             _destructive_signals = (
-                "delete", "remove", "cancel order", "cancel subscription",
-                "deactivate", "close account", "unsubscribe",
+                "delete account", "cancel order", "cancel subscription",
+                "deactivate account", "close account",
             )
 
-            is_payment = any(s in combined_text for s in _payment_signals)
-            is_auth = any(s in combined_text for s in _auth_signals)
-            is_cart = any(s in combined_text for s in _cart_signals)
-            is_destructive = any(s in combined_text for s in _destructive_signals)
+            is_payment = any(s in element_text for s in _payment_signals)
+            is_auth = any(s in element_text for s in _auth_signals)
+            is_cart = any(s in element_text for s in _cart_signals)
+            is_destructive = any(s in element_text for s in _destructive_signals)
 
             # Check if typing into a sensitive field
             is_sensitive_field = False
@@ -1085,7 +1125,7 @@ async def decide_action(state: AgentState) -> dict:
                             sensitive_field_type = "password"
                         elif el_type == "email" or "email" in el_name:
                             # Email on a login/signup page = sensitive
-                            if is_auth or any(w in combined_text for w in ("sign", "login", "account", "register")):
+                            if is_auth or any(w in element_text for w in ("sign", "login", "account", "register")):
                                 is_sensitive_field = True
                                 sensitive_field_type = "email"
                         elif any(w in el_label for w in ("card", "cvv", "expir", "credit", "debit")):
@@ -1102,7 +1142,7 @@ async def decide_action(state: AgentState) -> dict:
             # SKIP this check if we already have stored credentials waiting to be typed
             # (the fast path at the top of decide_action handles those)
             existing_creds = state.get("_stored_credentials", {})
-            if is_sensitive_field and action_type in {ActionType.TYPE_TEXT, ActionType.CLEAR_AND_TYPE} and not existing_creds:
+            if is_sensitive_field and action_type in {ActionType.CLEAR_AND_TYPE} and not existing_creds:
                 typed_value = _extract_value(args) or ""
                 # Strip submit marker
                 typed_value = typed_value.replace("|SUBMIT", "").strip()
@@ -1351,7 +1391,7 @@ async def smart_evaluate(state: AgentState) -> dict:
         return _build_fast_evaluation(state, plan, action_succeeded=True)
 
     # Case 4: Type/click succeeded, no unexpected page changes
-    if action_type in {ActionType.TYPE_TEXT, ActionType.CLEAR_AND_TYPE}:
+    if action_type in {ActionType.CLEAR_AND_TYPE}:
         if action_succeeded:
             logger.info("smart_evaluate_skip", reason="type_success")
             return _build_fast_evaluation(state, plan, action_succeeded=True)
@@ -1611,39 +1651,45 @@ async def self_critique_action(state: AgentState) -> dict:
 
     # --- Stuck loop detection ---
     action_history = state.get("action_history", [])
-    iteration = state.get("iteration_count", 0)
+
+    # Increment iteration count HERE (not in reason node) since reactive mode
+    # skips reason and goes decide_action → execute → self_critique → decide_action
+    iteration = state.get("iteration_count", 0) + 1
 
     # Safety: max iterations
     if iteration > state.get("max_iterations", 25):
         return {
             "cognitive_status": CognitiveStatus.COMPLETED,
             "should_terminate": True,
+            "iteration_count": iteration,
             "current_reasoning": "Maximum iterations reached. Reporting what was found so far.",
         }
 
-    # Safety: no meaningful progress after many actions
-    # If 8+ actions done and no extracted findings, force-terminate
-    if len(action_history) >= 8:
-        has_any_findings = any(
-            isinstance(entry.get("result", {}).get("extracted_data", ""), str)
-            and len(entry.get("result", {}).get("extracted_data", "")) > 50
-            and not entry.get("result", {}).get("extracted_data", "").startswith("data:image")
-            for entry in action_history
-        )
-        if not has_any_findings:
-            logger.info("self_critique_no_progress", msg=f"No findings after {len(action_history)} actions — force-terminating")
-            return {
-                "cognitive_status": CognitiveStatus.COMPLETED,
-                "should_terminate": True,
-            }
-
-    # If 12+ actions total regardless of findings, force-terminate
-    if len(action_history) >= 12:
-        logger.info("self_critique_max_actions", msg=f"Force-terminating after {len(action_history)} actions")
-        return {
-            "cognitive_status": CognitiveStatus.COMPLETED,
-            "should_terminate": True,
-        }
+    # Auto-complete after successful extract_listings — this is a one-shot extraction.
+    # The data is already gathered, no need for additional actions.
+    if action_history:
+        last_action = action_history[-1]
+        last_value = last_action.get("action", {}).get("value", "")
+        last_status = last_action.get("result", {}).get("status", "")
+        if last_value == "__EXTRACT_LISTINGS__" and last_status == "success":
+            extracted = last_action.get("result", {}).get("extracted_data", "")
+            if extracted and len(extracted) > 50:
+                logger.info("extract_listings_auto_done",
+                            msg="Structured extraction complete — auto-finishing")
+                # Format as natural language summary, not raw JSON
+                summary = _format_listings_summary(extracted)
+                return {
+                    "current_action": Action(
+                        action_id=f"act_{uuid.uuid4().hex[:8]}",
+                        action_type=ActionType.DONE,
+                        value=summary,
+                        description="Structured data extracted successfully",
+                        confidence=1.0,
+                        requires_confirmation=False,
+                    ),
+                    "cognitive_status": CognitiveStatus.COMPLETED,
+                    "iteration_count": iteration,
+                }
 
     # --- Strategy Escalation ---
     # When extraction fails repeatedly, escalate to a different strategy instead of giving up.
@@ -1764,30 +1810,70 @@ async def self_critique_action(state: AgentState) -> dict:
         no_url_change = len(urls) <= 1    # No navigation happened
 
         if same_type and no_url_change:
-            logger.info("self_critique_stuck_loop", msg=f"3x same action ({types[0]}) with no progress — forcing change")
-            # If we have findings, force done. Otherwise force a different action.
+            logger.info("self_critique_stuck_loop", msg=f"3x same action ({types[0]}) with no progress")
+
             memory = state.get("task_memory", TaskMemory())
             has_findings = any(
                 isinstance(v, str) and len(v) > 20 and not v.startswith("data:image")
                 for v in memory.important_data.values()
             )
+
+            # Check if we already tried visual_check recently
+            recent_visual = any(
+                "__VISUAL_CHECK__" in str(e.get("action", {}).get("value", ""))
+                for e in action_history[-5:]
+            )
+
             if has_findings:
+                # We have data — force completion instead of hoping the LLM calls done()
+                logger.info("stuck_loop_force_done", msg="3x repeated action with findings — forcing done()")
+                # Build summary from gathered findings
+                memory = state.get("task_memory", TaskMemory())
+                findings_parts = []
+                for key, data in (memory.important_data or {}).items():
+                    if isinstance(data, str) and len(data) > 20:
+                        findings_parts.append(data[:2000])
+                summary = "\n".join(findings_parts) if findings_parts else "Task data gathered (see export)."
+                auto_done = Action(
+                    action_id=f"act_{uuid.uuid4().hex[:8]}",
+                    action_type=ActionType.DONE,
+                    value=summary[:2000],
+                    description="Auto-completing with gathered data",
+                    confidence=1.0,
+                    requires_confirmation=False,
+                )
                 return {
-                    "cognitive_status": CognitiveStatus.DECIDING,
-                    "retry_context": RetryContext(),
-                    "current_reasoning": (
-                        "STUCK LOOP DETECTED: Same action repeated 3x. You already have findings. "
-                        "Call done(answer) NOW with a summary of what you found."
-                    ),
+                    "current_action": auto_done,
+                    "cognitive_status": CognitiveStatus.COMPLETED,
+                }
+            elif not recent_visual:
+                # No findings, haven't tried visual_check — auto-take screenshot
+                # This gives the agent actual visual context to break the loop
+                goal = state.get("goal", Goal(original_text=""))
+                logger.info("stuck_loop_visual_check", msg="Auto-queuing visual_check to break stuck loop")
+                auto_action = Action(
+                    action_id=f"act_{uuid.uuid4().hex[:8]}",
+                    action_type=ActionType.TAKE_SCREENSHOT,
+                    value=f"__VISUAL_CHECK__|I am stuck. What is currently visible on this page? What should I do next to complete this task: {goal.original_text[:150]}",
+                    description="Visual check to break stuck loop",
+                    confidence=1.0,
+                    requires_confirmation=False,
+                    risk_level="low",
+                )
+                return {
+                    "current_action": auto_action,
+                    "cognitive_status": CognitiveStatus.EXECUTING,
                 }
             else:
+                # Already tried visual_check, still stuck — try a completely different approach
                 return {
                     "cognitive_status": CognitiveStatus.DECIDING,
                     "retry_context": RetryContext(),
                     "current_reasoning": (
-                        "STUCK LOOP DETECTED: Same action repeated 3x with no progress. "
-                        "Try a DIFFERENT action: if scrolling isn't working, use read_page to get text. "
-                        "If read_page gave nothing useful, try clicking a different element or navigating elsewhere."
+                        "Stuck after 3 repeated actions and a visual check. "
+                        "Try a completely different approach: use navigate() to go "
+                        "directly to the target URL (construct from current domain + "
+                        "likely path like /routes, /settings, etc.), or use go_back."
                     ),
                 }
 
@@ -1914,11 +2000,12 @@ async def self_critique_action(state: AgentState) -> dict:
         parts.append(f"\nRemember the user's original request: \"{original_task[:200]}\"")
         parts.append("Make sure your done() summary matches what the user asked for (format, detail level, etc.)")
 
-    logger.info("self_critique_direct_to_action", findings_count=total_findings)
+    logger.info("self_critique_direct_to_action", findings_count=total_findings, iteration=iteration)
     return {
         "cognitive_status": CognitiveStatus.DECIDING,
         "retry_context": RetryContext(),
         "current_reasoning": "\n".join(parts),
+        "iteration_count": iteration,
     }
 
 
@@ -2113,6 +2200,117 @@ async def verify_goal(state: AgentState) -> dict:
 
 
 # ============================================================
+# Helper: Format findings using response template
+# ============================================================
+
+def _format_listings_summary(extracted_json: str) -> str:
+    """Format extract_listings JSON into a clean natural language summary.
+
+    Instead of dumping raw JSON, creates a short readable summary with a table
+    of the first few items. The full data is available via the export endpoint.
+    """
+    import json as _json
+    try:
+        data = _json.loads(extracted_json)
+    except (ValueError, TypeError):
+        return extracted_json[:500]
+
+    items = data.get("items", [])
+    total = data.get("total_items", len(items))
+    strategy = data.get("strategy", "")
+    page_url = data.get("page_url", "")
+
+    if not items:
+        return "No items found on this page."
+
+    # Build a clean summary
+    lines = [f"Found {total} items on this page."]
+    if page_url:
+        lines.append(f"Source: {page_url}")
+    lines.append("")
+
+    # Determine which fields are populated
+    fields = ["name", "price", "rating", "description"]
+    active_fields = []
+    for f in fields:
+        if any(item.get(f) for item in items[:10]):
+            active_fields.append(f)
+
+    if not active_fields:
+        active_fields = ["name"]
+
+    # Show first 10 items as a readable list
+    show_count = min(len(items), 10)
+    for i, item in enumerate(items[:show_count], 1):
+        parts = []
+        name = item.get("name", "").strip()
+        if name:
+            parts.append(name)
+        price = item.get("price", "").strip()
+        if price:
+            parts.append(price)
+        rating = item.get("rating", "").strip()
+        if rating:
+            parts.append(f"Rating: {rating}")
+        desc = item.get("description", "").strip()
+        if desc and desc != name:
+            parts.append(desc)
+        lines.append(f"{i}. {' | '.join(parts)}")
+
+    if total > show_count:
+        lines.append(f"\n... and {total - show_count} more items.")
+        lines.append("Use the download buttons below to get the full data as Excel/CSV/JSON/PDF.")
+
+    return "\n".join(lines)
+
+
+def _format_findings_with_template(template: dict, summary: str, memory) -> str | None:
+    """Attempt to format findings as structured data using a response template.
+
+    Parses the summary and memory data to extract key-value pairs matching
+    the template's structured_keys. Falls back to None if formatting fails.
+    """
+    try:
+        template_name = template.get("name", "")
+        structured_keys = template.get("structured_keys", [])
+        if not structured_keys:
+            return None
+
+        # Gather all text data from memory
+        data_parts = []
+        if hasattr(memory, "important_data") and memory.important_data:
+            for key, data in memory.important_data.items():
+                if isinstance(data, str) and len(data) > 10:
+                    data_parts.append(data)
+
+        if not data_parts and not summary:
+            return None
+
+        # Build a structured header based on template type
+        lines = []
+        if template_name == "price_check":
+            lines.append("## Price Check Results")
+            lines.append("Product | Price | Source URL")
+            lines.append("--------|-------|----------")
+        elif template_name == "product_search":
+            lines.append("## Product Search Results")
+            lines.append("Name | Price | Key Detail | URL")
+            lines.append("-----|-------|------------|----")
+        elif template_name == "info_lookup":
+            lines.append("## Information Lookup")
+        elif template_name == "data_extraction":
+            lines.append("## Extracted Data")
+
+        # Append the actual summary content (already contains the findings)
+        lines.append("")
+        lines.append(summary)
+
+        return "\n".join(lines)
+    except Exception:
+        return None
+
+
+# ============================================================
 # Node 11: Finalize
 # ============================================================
 
@@ -2178,6 +2376,14 @@ async def finalize(state: AgentState) -> dict:
         summary_parts.append(f"Error: {state['error']}")
 
     full_summary = "\n".join(summary_parts)
+
+    # Try to format output using response template if one matches
+    # Skip if summary already has the listings format (from _format_listings_summary)
+    template = detect_task_pattern(goal.original_text)
+    if template and findings and "Found " not in full_summary[:20]:
+        structured = _format_findings_with_template(template, full_summary, memory)
+        if structured:
+            full_summary = structured
 
     return {
         "cognitive_status": CognitiveStatus.COMPLETED if success else CognitiveStatus.FAILED,

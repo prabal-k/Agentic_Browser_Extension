@@ -262,19 +262,102 @@ Non-mutating action detected → skip the expensive DOM extraction call
 
 ---
 
+## Task 9: SPA Click Compatibility & Modal Handling
+
+**Goal:** Handle SPA navigation clicks that timeout due to overlays/animations, and teach the agent to dismiss post-login modals (workspace selectors, cookie consent, onboarding).
+
+**Impact:** Unblocks agent on React/Vue/Next.js SPAs where Playwright actionability checks fail.
+
+### Completed
+
+- [x] 9.1: Click fallback chain — normal click → force click → JS event simulation (mousedown+mouseup+click)
+- [x] 9.2: Post-click SPA URL polling — detect async redirects (login → dashboard) within 3s
+- [x] 9.3: Orchestrator-level URL change detection — polls after any click for SPA navigation
+- [x] 9.4: Modal/overlay awareness in prompts — agent handles modals FIRST before interacting with background
+- [x] 9.5: Stuck navigation guidance — after 2+ failed clicks on same element, try navigate() with constructed URL
+- [x] 9.6: Re-plan suppression — after v2, stop creating new plans and just adapt next action
+
+**Files Changed:** `action_executor.py`, `orchestrator.py`, `prompts.py`, `nodes.py`
+
+**Result:** Login + modal dismiss + SPA navigation working on SellrClub. Time cut from 300s to 158s.
+
+---
+
+## Task 10: Structured Data Extraction (extract_listings)
+
+**Goal:** Generalized tool to extract structured product/listing data from any website — auto-detects repeated card structures in the DOM.
+
+**Impact:** Enables structured JSON output for e-commerce, search results, job boards, etc.
+
+### Completed
+
+- [x] 10.1: New `extract_listings` tool — returns JSON with name, price, url, image_url, rating, specs, discount
+- [x] 10.2: Generic card detection JS — finds largest group of same-class siblings (works across all sites)
+- [x] 10.3: Price regex for global currencies (Rs, NPR, $, €, £, ₹, ¥, etc.)
+- [x] 10.4: Image URL extraction — checks src, data-src, data-lazy-src attributes
+- [x] 10.5: Added `src` to DOM element attribute extraction (was missing)
+- [x] 10.6: Dynamic tool selection — `extract_listings` auto-included when goal mentions price/product/listing/json
+- [x] 10.7: Prompt guidance — agent knows when to use extract_listings vs read_page
+
+**Files Changed:** `browser_tools.py`, `action_executor.py`, `dom_extractor.py`, `llm_client.py`, `prompts.py`
+
+---
+
+## Task 11: Export Output to File (PDF / CSV / Excel / JSON)
+
+**Goal:** Allow users to download the agent's findings as structured files (PDF, CSV, Excel, JSON). Especially useful for data extraction tasks (price checks, product comparisons, listing scrapes).
+
+**Impact:** Makes the agent output actionable — users can share, process, or import data into other tools.
+
+### Files to Change
+
+| File | Change | Risk |
+|---|---|---|
+| `backend/src/agent_core/server/app.py` | Add REST endpoint `/api/export` that accepts format + data | Low |
+| `backend/src/agent_core/server/ws_handler.py` | On `done`, auto-generate export URL and include in done message | Low |
+| `backend/src/agent_core/export/` | New module — formatters for JSON, CSV, Excel, PDF | Low |
+| `extension/entrypoints/sidepanel/main.ts` | Add download button in done message UI | Low |
+| `dashboard/` | Add download button in chat response area | Low |
+
+### Subtasks
+
+- [ ] 11.1: Create `backend/src/agent_core/export/` module with formatters:
+  - [ ] `json_formatter.py` — pretty-printed JSON with metadata (task, timestamp, source URL)
+  - [ ] `csv_formatter.py` — flatten structured data into CSV rows
+  - [ ] `excel_formatter.py` — openpyxl-based Excel with auto-column-width, header styling
+  - [ ] `pdf_formatter.py` — reportlab or weasyprint-based PDF with table + branding
+- [ ] 11.2: Add `/api/export` REST endpoint
+  - Accepts: `{ format: "json"|"csv"|"xlsx"|"pdf", data: {...}, filename: "..." }`
+  - Returns: file download response with correct content-type
+- [ ] 11.3: Auto-detect exportable data in `done()` output
+  - If `extract_listings` was used, offer export automatically
+  - If done summary contains structured findings, parse and offer export
+- [ ] 11.4: WebSocket: include `export_available: true` + `export_url` in done message
+- [ ] 11.5: Extension sidepanel: download button (calls export endpoint, triggers browser download)
+- [ ] 11.6: Dashboard: download dropdown with format selection (JSON/CSV/Excel/PDF)
+- [ ] 11.7: Test cases
+  - [ ] Daraz product search → download CSV with product names, prices, URLs
+  - [ ] Price comparison → download PDF with comparison table
+  - [ ] Generic text task → no export offered (graceful fallback)
+
+---
+
 ## Implementation Order
 
 ```
 Phase 1 (Completed):
   [x] Task 1: Action Batching — scroll+read auto-batch, duplicate detection
   [x] Task 2: Page Context Caching — skip DOM re-extraction for non-mutating actions
+  [x] Task 9: SPA Click Compatibility & Modal Handling
+  [x] Task 10: Structured Data Extraction (extract_listings)
 
 Phase 2 (Next Sprint):
+  [ ] Task 11: Export Output to File (PDF / CSV / Excel / JSON)
   [ ] Task 5: Smarter Element Selection
-  [ ] Task 6: Streaming Response Summary
   [ ] Task 8: Response Templates
 
 Phase 3 (Future):
+  [ ] Task 6: Streaming Response Summary
   [ ] Task 3: Multi-Tab Parallel Research
   [ ] Task 4: Session Memory
   [ ] Task 7: Preload Next Likely Page (depends on Task 3)
@@ -282,8 +365,38 @@ Phase 3 (Future):
 
 ## Known Issues
 
-- [!] DuckDuckGo price search regressed (56s → 147s) due to strategy escalation looping on pages where read_page returns same header text. Not caused by Task 1 or 2 changes. Root cause: read_page content extraction from retailer pages returns navigation text instead of product content.
-- [x] Extension background.ts now implements page context caching (Task 2.3 completed)
+### [!] Retailer Page Content Extraction (affects DuckDuckGo price search and similar tasks)
+
+**Symptom:** Agent takes 15-19 actions and 300+s on tasks that require reading prices from third-party retailer websites (gadgetbytenepal.com, maxell.com.np, etc.).
+
+**Root Cause:** `read_page` uses `innerText` which doesn't capture JavaScript-rendered content. Retailer sites render product cards/prices via React/Vue after page load. The extracted text contains only navigation/header text, not product data. This triggers strategy escalation (scroll → read → same content → scroll → read → visual_check → repeat).
+
+**NOT affected:** Direct URL tasks (YouTube, Daraz, Google Maps), sites with server-rendered content (HN, Wikipedia), login flows.
+
+**IS affected:** Any task that requires `read_page` on a JS-heavy third-party site reached via search.
+
+**Potential fixes (prioritized):**
+1. Auto-switch to `visual_check` when `read_page` returns < 200 chars — vision model can read prices from rendered screenshots
+2. Wait for JS rendering (3s delay) before `innerText` extraction
+3. Check for price/product CSS selectors before attempting text extraction — if DOM has product elements but text is empty, use vision
+4. Use `page.evaluate` with `querySelectorAll('[class*=price]')` to extract prices directly from CSS-targeted elements
+
+**Workaround:** Tasks that go directly to known sites (Daraz, Amazon) work fast because the direct URL lands on the correct page with server-rendered content.
+
+### Resolved Issues
+- [x] Extension background.ts implements page context caching (Task 2.3)
+- [x] Simple button confirmation fixed — only element text triggers risk detection, not description
+- [x] Google Maps regression — vision model works, 7 actions, correct answer
+- [x] Login credential flow — auto-type from parsed user input works
+- [x] SPA hydration wait — content script waits up to 8s for React/Vue to render
+- [x] Contenteditable typing — Teams/Slack paste simulation + InputEvent dispatch
+- [x] `combined_text` variable crash in nodes.py — fixed to use `element_text`
+- [x] SPA click timeouts — force click + JS event fallback chain (Task 9)
+- [x] Post-login modal blocking — agent now handles modals first (Task 9)
+- [x] SPA login redirect not detected — URL polling catches async redirects (Task 9)
+- [x] Re-planning loops — suppressed after v2, agent adapts reactively (Task 9)
+- [x] Missing image src in DOM extraction — added `src` to attribute list (Task 10)
+- [x] No structured data extraction — new extract_listings tool (Task 10)
 
 ## Testing Protocol
 

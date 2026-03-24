@@ -258,7 +258,7 @@ function addEvalMessage(data: any) {
   addMessage('agent', data.action_succeeded ? 'Action succeeded' : 'Action failed', extra);
 }
 
-function addDoneMessage(success: boolean, summary: string, actions: number) {
+function addDoneMessage(success: boolean, summary: string, actions: number, rawData?: any) {
   welcomeEl.classList.add('hidden');
   const div = document.createElement('div');
   div.className = `msg done-result ${success ? 'success' : 'failed'}`;
@@ -287,6 +287,37 @@ function addDoneMessage(success: boolean, summary: string, actions: number) {
     body.appendChild(p);
   }
   div.appendChild(body);
+
+  // Export download buttons (if structured data is available)
+  if (rawData?.export_available && rawData.export_id) {
+    const exportBar = document.createElement('div');
+    exportBar.className = 'export-bar';
+    const label = document.createElement('span');
+    label.className = 'export-label';
+    label.textContent = `Download (${rawData.export_items || '?'} items):`;
+    exportBar.appendChild(label);
+
+    const formats = [
+      { label: 'JSON', key: 'json' },
+      { label: 'CSV', key: 'csv' },
+      { label: 'Excel', key: 'xlsx' },
+      { label: 'PDF', key: 'pdf' },
+    ];
+    for (const fmt of formats) {
+      const btn = document.createElement('button');
+      btn.className = 'export-btn';
+      btn.textContent = fmt.label;
+      btn.addEventListener('click', () => {
+        const baseUrl = (window as any).__WS_URL__
+          ? (window as any).__WS_URL__.replace('ws://', 'http://').replace('/ws', '')
+          : 'http://localhost:8001';
+        const url = `${baseUrl}/api/export/${rawData.export_id}?format=${fmt.key}`;
+        window.open(url, '_blank');
+      });
+      exportBar.appendChild(btn);
+    }
+    div.appendChild(exportBar);
+  }
 
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -531,7 +562,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
     else if (msgType === 'server_done') {
       setWorking(false);
-      addDoneMessage(data.success, data.summary || 'Task complete', data.total_actions || 0);
+      addDoneMessage(data.success, data.summary || 'Task complete', data.total_actions || 0, data);
     }
 
     else if (msgType === 'server_error') {

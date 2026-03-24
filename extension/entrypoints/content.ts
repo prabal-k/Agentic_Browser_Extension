@@ -36,6 +36,8 @@ interface DOMElement {
   parent_context: string;
   children_count: number;
   css_selector: string;
+  is_leaf: boolean;
+  depth: number;
 }
 
 interface PageContext {
@@ -302,6 +304,8 @@ function extractPageContext(maxInteractive = 250, maxInfo = 50): PageContext {
       parent_context: parentContext,
       children_count: el.querySelectorAll('a, button, input, textarea, select').length,
       css_selector: buildSelector(el),
+      is_leaf: el.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"]').length === 0,
+      depth: (() => { let d = 0; let p = el.parentElement; while (p && p !== document.body) { d++; p = p.parentElement; } return d; })(),
     });
 
     return true;
@@ -502,9 +506,15 @@ interface ActionResult {
 
 /**
  * Type text into an element using multiple strategies.
- * Strategy 1: execCommand (works on most contenteditable and inputs)
- * Strategy 2: Simulate individual keydown/keypress/keyup events
- * Strategy 3: Direct .value set + input event (fallback)
+ * Works for: <input>, <textarea>, contenteditable divs (Teams, Slack, Google Docs),
+ * React/Vue/Angular controlled inputs, and custom web components.
+ *
+ * Strategy order:
+ * 1. Focus + execCommand('insertText') — works on most modern inputs and contenteditable
+ * 2. Clipboard paste (for contenteditable SPAs like Teams that block execCommand)
+ * 3. Character-by-character InputEvent dispatch (React/Angular compatible)
+ * 4. Direct value set + native event dispatch (last resort for inputs)
+ *
  * After typing, verifies the text was actually entered.
  */
 async function typeIntoElement(
@@ -512,79 +522,153 @@ async function typeIntoElement(
   text: string,
   clearFirst: boolean,
 ): Promise<{ success: boolean; error: string }> {
-  // Focus the element first
+  // Focus the element first — click to ensure cursor placement
   el.focus();
   el.click();
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 80));
 
   const inputEl = el as HTMLInputElement;
   const isInput = 'value' in el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
-  const isContentEditable = el.isContentEditable;
+  const isContentEditable = el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+
+  // Also check parent — some SPAs put contenteditable on a parent wrapper
+  const editableTarget = isContentEditable ? el :
+    el.closest('[contenteditable="true"]') as HTMLElement | null;
+  const actuallyContentEditable = !!editableTarget;
+
+  if (actuallyContentEditable && editableTarget && editableTarget !== el) {
+    editableTarget.focus();
+    editableTarget.click();
+    await new Promise(r => setTimeout(r, 50));
+  }
+
+  const targetEl = actuallyContentEditable ? (editableTarget || el) : el;
 
   // Clear existing content if requested
   if (clearFirst) {
     if (isInput) {
       inputEl.value = '';
       el.dispatchEvent(new Event('input', { bubbles: true }));
-    } else if (isContentEditable) {
-      el.textContent = '';
     }
-    // Also try select-all + delete
+    // Select all + delete works for both input and contenteditable
+    targetEl.focus();
     document.execCommand('selectAll', false);
     document.execCommand('delete', false);
-    await new Promise(r => setTimeout(r, 30));
+    await new Promise(r => setTimeout(r, 50));
   }
 
-  // Strategy 1: execCommand('insertText') — works on most modern inputs including Google
-  let worked = false;
-  if (document.queryCommandSupported?.('insertText') !== false) {
-    worked = document.execCommand('insertText', false, text);
+  // --- Strategy 1: execCommand('insertText') ---
+  // Best approach — triggers native input events that frameworks listen to
+  targetEl.focus();
+  let typed = false;
+  try {
+    typed = document.execCommand('insertText', false, text);
+  } catch { /* some browsers throw instead of returning false */ }
+  await new Promise(r => setTimeout(r, 80));
+
+  // Check if it actually worked
+  const textAfterExec = getElementText(targetEl, isInput);
+  if (typed && textAfterExec.includes(text.substring(0, Math.min(10, text.length)))) {
+    return { success: true, error: '' };
   }
 
-  // Strategy 2: If execCommand didn't work, simulate individual key events
-  if (!worked || (isInput && inputEl.value !== text && !inputEl.value.includes(text))) {
-    if (isInput) {
-      // Direct set as last resort, but with proper event simulation
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype, 'value'
-      )?.set || Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
-      )?.set;
+  // --- Strategy 2: Clipboard paste (for contenteditable SPAs) ---
+  // Teams, Slack, and similar apps handle paste events properly
+  if (actuallyContentEditable) {
+    targetEl.focus();
+    try {
+      // Create and dispatch a paste event with the text
+      const clipboardData = new DataTransfer();
+      clipboardData.setData('text/plain', text);
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: clipboardData,
+      });
+      targetEl.dispatchEvent(pasteEvent);
+      await new Promise(r => setTimeout(r, 100));
 
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(el, clearFirst ? text : inputEl.value + text);
-      } else {
-        inputEl.value = clearFirst ? text : inputEl.value + text;
+      const textAfterPaste = getElementText(targetEl, false);
+      if (textAfterPaste.includes(text.substring(0, Math.min(10, text.length)))) {
+        return { success: true, error: '' };
       }
+    } catch { /* paste simulation not supported */ }
+  }
 
-      // Dispatch React-compatible events
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+  // --- Strategy 3: Character-by-character InputEvent dispatch ---
+  // Works for React/Angular contenteditable components
+  if (actuallyContentEditable) {
+    targetEl.focus();
+    for (const char of text) {
+      targetEl.dispatchEvent(new KeyboardEvent('keydown', { key: char, code: `Key${char.toUpperCase()}`, bubbles: true }));
+      targetEl.dispatchEvent(new InputEvent('beforeinput', { data: char, inputType: 'insertText', bubbles: true, cancelable: true }));
+      targetEl.dispatchEvent(new InputEvent('input', { data: char, inputType: 'insertText', bubbles: true }));
+      targetEl.dispatchEvent(new KeyboardEvent('keyup', { key: char, code: `Key${char.toUpperCase()}`, bubbles: true }));
+    }
+    await new Promise(r => setTimeout(r, 100));
 
-      // Also fire individual key events for each character (helps React/Angular)
-      for (const char of text) {
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-        el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
-        el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
-      }
-    } else if (isContentEditable) {
-      el.textContent = (clearFirst ? '' : (el.textContent || '')) + text;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+    const textAfterEvents = getElementText(targetEl, false);
+    if (textAfterEvents.includes(text.substring(0, Math.min(10, text.length)))) {
+      return { success: true, error: '' };
+    }
+
+    // Last resort for contenteditable: set innerHTML directly
+    if (clearFirst) {
+      targetEl.innerHTML = `<p>${text}</p>`;
+    } else {
+      targetEl.innerHTML += text;
+    }
+    targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 50));
+  }
+
+  // --- Strategy 4: Direct value set for <input>/<textarea> ---
+  if (isInput) {
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype, 'value'
+    )?.set || Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype, 'value'
+    )?.set;
+
+    const newValue = clearFirst ? text : inputEl.value + text;
+    if (nativeSetter) {
+      nativeSetter.call(el, newValue);
+    } else {
+      inputEl.value = newValue;
+    }
+
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+
+    for (const char of text) {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
     }
   }
 
-  // Small delay for frameworks to process
   await new Promise(r => setTimeout(r, 100));
 
-  // Verify the text was entered
-  if (isInput) {
-    const currentValue = inputEl.value;
-    if (!currentValue.includes(text.substring(0, Math.min(10, text.length)))) {
-      return { success: false, error: `Text verification failed: input value is "${currentValue.substring(0, 50)}" but expected to contain "${text.substring(0, 30)}"` };
-    }
+  // --- Verify ---
+  const finalText = getElementText(targetEl, isInput);
+  const snippet = text.substring(0, Math.min(10, text.length));
+  if (!finalText.includes(snippet)) {
+    return {
+      success: false,
+      error: `Typing failed: element text is "${finalText.substring(0, 50)}" but expected "${text.substring(0, 30)}"`,
+    };
   }
 
   return { success: true, error: '' };
+}
+
+/**
+ * Get the current text content of an element (input value or contenteditable text).
+ */
+function getElementText(el: HTMLElement, isInput: boolean): string {
+  if (isInput) {
+    return (el as HTMLInputElement).value || '';
+  }
+  return (el.innerText || el.textContent || '').trim();
 }
 
 /**
@@ -601,6 +685,223 @@ async function simulateEnter(el: HTMLElement): Promise<void> {
   if (form) {
     try { form.requestSubmit(); } catch { form.submit(); }
   }
+
+  // Fallback: click the nearest search/submit button
+  await new Promise(r => setTimeout(r, 200));
+  const searchBtn = document.querySelector('button[aria-label*="Search"], button[type="submit"], #searchbox-searchbutton');
+  if (searchBtn) (searchBtn as HTMLElement).click();
+}
+
+/**
+ * Universal listing extractor — finds product/listing data on any page.
+ * Multi-strategy: JSON-LD → Price-anchored DOM walking → Card detection.
+ */
+function extractListingsFromPage(): string {
+  const PRICE_PATTERNS = [
+    /(?:Rs\.\s*|Rs\s+|NPR\s*|\$|USD\s*|EUR\s*|€|£|¥|₹|৳|kr\s*)[\d,]+(?:\.\d{1,2})?/i,
+    /[\d,]+(?:\.\d{1,2})?\s*(?:Rs\.|NPR|USD|EUR|GBP)/i,
+    /[^\x00-\x7F]\s*[\d,]+\.?\d{0,2}/,  // Non-ASCII currency symbols
+  ];
+
+  function hasPrice(text: string): boolean {
+    return PRICE_PATTERNS.some(re => re.test(text));
+  }
+
+  function extractPrice(el: Element): string {
+    const text = (el as HTMLElement).innerText || '';
+    for (const re of PRICE_PATTERNS) {
+      const m = text.match(re);
+      if (m) return m[0].trim();
+    }
+    return '';
+  }
+
+  function resolveUrl(href: string): string {
+    if (!href) return '';
+    if (href.startsWith('http')) return href;
+    if (href.startsWith('//')) return 'https:' + href;
+    if (href.startsWith('/')) return window.location.origin + href;
+    return href;
+  }
+
+  function extractName(el: Element): string {
+    const heading = el.querySelector('h1,h2,h3,h4,h5,h6');
+    if (heading && (heading as HTMLElement).innerText.trim().length > 3) return (heading as HTMLElement).innerText.trim();
+    const named = el.querySelector('[class*="name"],[class*="title"],[class*="Name"],[class*="Title"]');
+    if (named && (named as HTMLElement).innerText.trim().length > 3) return (named as HTMLElement).innerText.trim();
+    let bestLink = '';
+    el.querySelectorAll('a[href]').forEach(a => {
+      const t = (a as HTMLElement).innerText.trim();
+      if (t.length > bestLink.length && t.length > 5 && !hasPrice(t)) bestLink = t;
+    });
+    if (bestLink) return bestLink;
+    const img = el.querySelector('img[alt]') as HTMLImageElement | null;
+    if (img && img.alt.trim().length > 3) return img.alt.trim();
+    return '';
+  }
+
+  function extractFromCard(el: Element): Record<string, string> {
+    const item: Record<string, string> = {};
+    item.name = extractName(el).substring(0, 250);
+    const link = el.querySelector('a[href]');
+    if (link) item.url = resolveUrl(link.getAttribute('href') || '');
+    item.price = extractPrice(el);
+    const del_ = el.querySelector('del, s, [class*="original"], [class*="old-price"]');
+    if (del_) item.original_price = ((del_ as HTMLElement).innerText || '').trim();
+    const discountMatch = ((el as HTMLElement).innerText || '').match(/-?\d{1,3}%/);
+    if (discountMatch) item.discount = discountMatch[0];
+    const img = el.querySelector('img') as HTMLImageElement | null;
+    if (img) {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || img.dataset?.src || '';
+      item.image_url = resolveUrl(src);
+    }
+    const ratingEl = el.querySelector('[class*="rating"],[class*="star"],[aria-label*="star"]');
+    if (ratingEl) {
+      const rt = ratingEl.getAttribute('aria-label') || (ratingEl as HTMLElement).innerText || '';
+      const rm = rt.match(/(\d+\.?\d*)/);
+      if (rm) item.rating = rm[1];
+    }
+    const reviewMatch = ((el as HTMLElement).innerText || '').match(/(\d[\d,.]*\s*(?:k|K)?)\s*(?:review|rating|sold)/i);
+    if (reviewMatch) item.reviews = reviewMatch[1];
+    return item;
+  }
+
+  // Strategy 1: JSON-LD
+  let items: Record<string, string>[] | null = null;
+  let strategy = '';
+
+  // Strategy 0: Semantic feeds (Google Maps, role="feed", accessible lists)
+  try {
+    // Google Maps: links to places
+    const mapLinks = document.querySelectorAll('a[href*="/maps/place"]');
+    if (mapLinks.length >= 2) {
+      const mapItems: Record<string, string>[] = [];
+      const seen = new Set<Element>();
+      mapLinks.forEach(a => {
+        if (mapItems.length >= 80) return;
+        let card: Element | null = a.parentElement || a;
+        for (let i = 0; i < 3; i++) {
+          if (card!.querySelector('img') || card!.querySelector('[role="img"]')) break;
+          if (card!.parentElement && card!.parentElement !== document.body) card = card!.parentElement;
+          else break;
+        }
+        if (!card || seen.has(card)) return;
+        seen.add(card);
+        const data = extractFromCard(card);
+        if (!data.name && a.getAttribute('aria-label')) data.name = a.getAttribute('aria-label')!;
+        if (!data.url) data.url = a.getAttribute('href') || '';
+        // Convert Devanagari numerals in rating
+        if (data.rating) data.rating = data.rating.replace(/[\u0966-\u096F]/g, (c: string) => String(c.charCodeAt(0) - 0x0966));
+        if (data.name) mapItems.push(data);
+      });
+      if (mapItems.length >= 2) { items = mapItems; strategy = 'semantic-feed'; }
+    }
+    // role="feed" container
+    if (!items) {
+      const feed = document.querySelector('[role="feed"]');
+      if (feed && feed.children.length >= 3) {
+        const feedItems: Record<string, string>[] = [];
+        for (const child of Array.from(feed.children)) {
+          if (feedItems.length >= 80) break;
+          const data = extractFromCard(child);
+          if (data.name) feedItems.push(data);
+        }
+        if (feedItems.length >= 2) { items = feedItems; strategy = 'semantic-feed'; }
+      }
+    }
+  } catch (_) { /* ignore */ }
+
+  // Strategy 1: JSON-LD
+  if (!items) try {
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    const jldItems: Record<string, string>[] = [];
+    scripts.forEach(script => {
+      try {
+        let data = JSON.parse(script.textContent || '');
+        if (data['@graph']) data = data['@graph'];
+        const arr = Array.isArray(data) ? data : [data];
+        for (const obj of arr) {
+          if (obj['@type'] === 'ItemList' && obj.itemListElement) {
+            for (const li of obj.itemListElement) {
+              const prod = li.item || li;
+              if (prod.name) jldItems.push({ name: prod.name, url: resolveUrl(prod.url || ''), price: prod.offers?.price || '' });
+            }
+          }
+          if (obj['@type'] === 'Product' && obj.name) {
+            jldItems.push({ name: obj.name, url: resolveUrl(obj.url || ''), price: obj.offers?.price || '' });
+          }
+        }
+      } catch (_) { /* ignore */ }
+    });
+    if (jldItems.length >= 2 && jldItems.filter(i => i.price).length >= jldItems.length * 0.5) {
+      items = jldItems;
+      strategy = 'json-ld';
+    }
+  } catch (_) { /* ignore */ }
+
+  // Strategy 2: Price-anchored DOM walking
+  if (!items) {
+    try {
+      const priceEls: Element[] = [];
+      document.querySelectorAll('span, div, p, strong, b, em, ins, del, s, td, bdi, .woocommerce-Price-amount, .price').forEach(el => {
+        if (priceEls.length >= 200) return;
+        const text = ((el as HTMLElement).innerText || el.textContent || '').trim();
+        if (text.length >= 4 && text.length <= 60 && hasPrice(text)) priceEls.push(el);
+      });
+      if (priceEls.length >= 2) {
+        const seen = new Set<Element>();
+        const cards: Element[] = [];
+        for (const priceEl of priceEls) {
+          let card: Element | null = priceEl;
+          let bestCard: Element | null = null;
+          for (let i = 0; i < 8; i++) {
+            card = card!.parentElement;
+            if (!card || card === document.body) break;
+            const textLen = ((card as HTMLElement).innerText || '').length;
+            if (textLen > 1500) break;
+            const hasLink = !!card.querySelector('a[href]');
+            const hasImg = !!card.querySelector('img');
+            const isNav = !!card.closest('nav, aside, [role="navigation"], [class*="sidebar"], [class*="filter"]');
+            if (isNav) continue;
+            if (hasLink && hasImg) { bestCard = card; break; }
+            if (hasLink || hasImg) bestCard = card;
+          }
+          const finalCard = bestCard || card;
+          if (finalCard && finalCard !== document.body && !seen.has(finalCard)) {
+            const tLen = ((finalCard as HTMLElement).innerText || '').length;
+            if (tLen > 10 && tLen < 1500) { seen.add(finalCard); cards.push(finalCard); }
+          }
+        }
+        if (cards.length >= 2) {
+          const extracted: Record<string, string>[] = [];
+          for (let i = 0; i < Math.min(cards.length, 60); i++) {
+            const data = extractFromCard(cards[i]);
+            if (data.name || data.price) extracted.push(data);
+          }
+          if (extracted.length >= 2) { items = extracted; strategy = 'price-anchored'; }
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  // Post-filter
+  if (items) {
+    const navWords = /^(price|filter|category|sort|shop on|popular|brand|condition|format|type|color|see all|show more|sponsored)$/i;
+    items = items.filter(i => {
+      const name = (i.name || '').trim();
+      if (name.length > 0 && name.length < 8) return false;
+      if (navWords.test(name)) return false;
+      return true;
+    });
+    const seenUrls = new Set<string>();
+    items = items.filter(i => { if (!i.url) return true; if (seenUrls.has(i.url)) return false; seenUrls.add(i.url); return true; });
+  }
+
+  if (!items || items.length === 0) {
+    return JSON.stringify({ error: 'No listing structure detected on this page.' });
+  }
+
+  return JSON.stringify({ strategy, total_items: items.length, page_url: window.location.href, items }, null, 2);
 }
 
 async function executeAction(action: ActionRequest): Promise<ActionResult> {
@@ -653,7 +954,7 @@ async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
         const elName = (inputEl.name || '').toLowerCase();
         const elRole = (el.getAttribute('role') || '').toLowerCase();
         const elPh = (inputEl.placeholder || '').toLowerCase();
-        const isSearch = elType === 'search' || elRole === 'searchbox'
+        const isSearch = elType === 'search' || elRole === 'searchbox' || elRole === 'combobox'
           || ['q', 'query', 'search', 'search_query'].includes(elName)
           || ['search', 'find', 'look for'].some(w => elPh.includes(w));
         if (isSearch) shouldSubmit = true;
@@ -779,6 +1080,22 @@ async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
     }
 
     case 'extract_text': {
+      // Check for special markers
+      if (action.value === '__EXTRACT_LISTINGS__') {
+        const listingsData = extractListingsFromPage();
+        return { status: 'success', message: `Extracted ${listingsData.substring(0, 50)}...`, page_changed: false, execution_time_ms: 0, extracted_data: listingsData };
+      }
+      if (action.value === '__READ_PAGE__') {
+        // Read visible viewport text with DOM stability wait
+        const bodyText = document.body.innerText || '';
+        const viewH = window.innerHeight;
+        const scrollY = window.scrollY;
+        const totalHeight = document.documentElement.scrollHeight;
+        const scrollRatio = totalHeight > viewH ? scrollY / (totalHeight - viewH) : 0;
+        const startPos = Math.floor(scrollRatio * Math.max(0, bodyText.length - 4000));
+        const text = bodyText.substring(startPos, startPos + 4000);
+        return { status: 'success', message: `Extracted ${text.length} chars`, page_changed: false, execution_time_ms: 0, extracted_data: text };
+      }
       const text = el ? (el as HTMLElement).innerText : document.body.innerText;
       return { status: 'success', message: 'Extracted text', page_changed: false, execution_time_ms: 0, extracted_data: text?.substring(0, 2000) };
     }
@@ -998,16 +1315,57 @@ export default defineContentScript({
     // Start observing DOM changes
     startObserver();
 
+    /**
+     * Wait for SPA hydration — polls until interactive elements appear.
+     * SPAs (React, Vue, Angular, Next.js) render content after the initial
+     * HTML loads. The initial DOM may show a loading spinner with 0 interactive
+     * elements. This function waits until the framework renders real content.
+     *
+     * Returns the extracted PageContext once elements are found, or after timeout.
+     */
+    async function waitForInteractiveElements(maxWaitMs = 8000): Promise<PageContext> {
+      const startTime = Date.now();
+      const pollInterval = 500; // Check every 500ms
+
+      while (Date.now() - startTime < maxWaitMs) {
+        const ctx = extractPageContext(250, 50);
+
+        // If we found interactive elements, return immediately
+        if (ctx.elements.length > 3) {
+          return ctx;
+        }
+
+        // Check if the page has ANY visible content (not just a spinner)
+        const bodyText = (document.body?.innerText || '').trim();
+        const hasSubstantialContent = bodyText.length > 100 &&
+          !bodyText.includes('Loading') &&
+          !bodyText.includes('Getting things ready');
+
+        // If there's substantial text but few elements, the page might be
+        // content-heavy without many interactive elements — return what we have
+        if (hasSubstantialContent && ctx.elements.length > 0) {
+          return ctx;
+        }
+
+        // Wait before next poll
+        await new Promise(r => setTimeout(r, pollInterval));
+      }
+
+      // Timeout — return whatever we have (may be empty)
+      return extractPageContext(250, 50);
+    }
+
     // Listen for messages from background service worker
     chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
       const { type } = message;
 
       if (type === 'extract_dom') {
-        const context = extractPageContext(
-          message.maxInteractive || 250,
-          message.maxInfo || 50,
-        );
-        sendResponse({ success: true, data: context });
+        // Wait for SPA hydration — poll until interactive elements appear
+        // SPAs (React, Vue, Angular) render content after initial HTML load
+        waitForInteractiveElements().then(context => {
+          sendResponse({ success: true, data: context });
+        });
+        return true; // Keep message channel open for async response
       }
 
       else if (type === 'execute_action') {

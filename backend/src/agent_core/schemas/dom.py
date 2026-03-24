@@ -134,6 +134,14 @@ class DOMElement(BaseModel):
         default="",
         description="XPath that can locate this element. Secondary fallback."
     )
+    is_leaf: bool = Field(
+        default=True,
+        description="Whether the element has no interactive children (leaf in the interaction tree)"
+    )
+    depth: int = Field(
+        default=0,
+        description="DOM depth relative to document.body"
+    )
 
     def to_llm_representation(self) -> str:
         """Convert to a compact string the LLM can easily parse.
@@ -176,6 +184,10 @@ class DOMElement(BaseModel):
         # State — only show non-default states (focused is notable, visible/enabled are assumed)
         if self.is_focused:
             parts.append("*focused")
+
+        # Container tag — helps LLM distinguish wrappers from leaf elements
+        if not self.is_leaf and self.children_count > 0:
+            parts.append("[container]")
 
         # Parent context — compressed
         if self.parent_context:

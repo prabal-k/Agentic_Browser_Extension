@@ -11,8 +11,9 @@ Usage:
 import time
 
 import structlog
-from fastapi import FastAPI, WebSocket, Query
+from fastapi import FastAPI, WebSocket, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, SecretStr
 
 from agent_core.config import settings
@@ -229,6 +230,34 @@ def create_app() -> FastAPI:
         }
 
         return {"providers": providers}
+
+    # ============================================================
+    # Export Endpoints
+    # ============================================================
+
+    from agent_core.export import export_store, format_export
+
+    @app.get("/api/export/{export_id}")
+    async def export_data(
+        export_id: str,
+        format: str = Query(default="json", description="Export format: json, csv, xlsx, pdf"),
+    ):
+        """Download exported data in the requested format."""
+        stored = export_store.get(export_id)
+        if not stored:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "Export not found or expired (10 min TTL)"},
+            )
+
+        content, content_type, filename = format_export(
+            stored["data"], format, stored.get("metadata")
+        )
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     # ============================================================
     # WebSocket Endpoint

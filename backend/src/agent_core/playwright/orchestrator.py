@@ -219,6 +219,18 @@ async def run_scenario(
                             )
 
                             if not skip_dom:
+                                # For click actions where URL didn't change yet,
+                                # poll briefly for SPA navigation (login redirects, etc.)
+                                if (action_type == 'click'
+                                        and not action_result.page_changed):
+                                    pre_url = page.url
+                                    for _ in range(6):  # up to 3s
+                                        await page.wait_for_timeout(500)
+                                        if page.url != pre_url:
+                                            action_result.page_changed = True
+                                            action_result.new_url = page.url
+                                            break
+
                                 # Wait for page to settle after action
                                 wait_time = 2000 if action_result.page_changed else 800
                                 await page.wait_for_timeout(wait_time)
