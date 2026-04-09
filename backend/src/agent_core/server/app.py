@@ -33,6 +33,7 @@ class KeySubmission(BaseModel):
     """Keys submitted from extension UI. SecretStr masks in logs."""
     openai_api_key: str = ""
     groq_api_key: str = ""
+    openrouter_api_key: str = ""
     ollama_base_url: str = ""
     preferred_provider: str = ""
     preferred_model: str = ""
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
         provider_keys = ProviderKeys(
             openai_api_key=SecretStr(submission.openai_api_key),
             groq_api_key=SecretStr(submission.groq_api_key),
+            openrouter_api_key=SecretStr(submission.openrouter_api_key),
             ollama_base_url=submission.ollama_base_url or settings.ollama_base_url,
             preferred_provider=submission.preferred_provider,
             preferred_model=submission.preferred_model,
@@ -227,6 +229,27 @@ def create_app() -> FastAPI:
             "available": ollama_reachable,
             "url": settings.ollama_base_url,
             "models": ollama_models,
+        }
+
+        # OpenRouter — free models with tool calling support
+        has_openrouter = bool(settings.openrouter_api_key.get_secret_value())
+        if token:
+            keys = key_vault.get_keys(token)
+            if keys and keys.openrouter_api_key.get_secret_value():
+                has_openrouter = True
+        providers["openrouter"] = {
+            "available": has_openrouter,
+            "models": [
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "mistralai/mistral-small-3.1-24b-instruct:free",
+                "nvidia/nemotron-3-super-120b-a12b:free",
+                "qwen/qwen3-coder:free",
+                "qwen/qwen3-next-80b-a3b-instruct:free",
+                "nvidia/nemotron-nano-12b-v2-vl:free",
+                "nvidia/nemotron-nano-9b-v2:free",
+                "google/gemini-2.5-flash-preview",
+                "anthropic/claude-sonnet-4",
+            ],
         }
 
         return {"providers": providers}

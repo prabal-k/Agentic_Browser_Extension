@@ -192,6 +192,9 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
     goal = raw.get("goal", "")
     dom_data = raw.get("dom_snapshot")
     model_override = raw.get("model_override")
+    memory_k = raw.get("session_memory_k")
+    if memory_k is not None:
+        session.session_memory_k = int(memory_k)
 
     if not goal:
         await send_msg(ws, "server_error",
@@ -225,10 +228,13 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
             api_keys = {}
             openai_key = vault_keys.openai_api_key.get_secret_value()
             groq_key = vault_keys.groq_api_key.get_secret_value()
+            openrouter_key = vault_keys.openrouter_api_key.get_secret_value()
             if openai_key:
                 api_keys["openai_api_key"] = openai_key
             if groq_key:
                 api_keys["groq_api_key"] = groq_key
+            if openrouter_key:
+                api_keys["openrouter_api_key"] = openrouter_key
             if vault_keys.ollama_base_url:
                 api_keys["ollama_base_url"] = vault_keys.ollama_base_url
 
@@ -240,6 +246,7 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
                 provider_defaults = {
                     "openai": settings.openai_model,
                     "groq": settings.groq_model,
+                    "openrouter": settings.openrouter_model,
                     "ollama": settings.ollama_model,
                 }
                 model_name = provider_defaults.get(
@@ -256,12 +263,41 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
                 has_dom=page_context is not None,
                 has_vault_keys=api_keys is not None)
 
-    # Create initial state
+    # Retrieve prior conversation messages from the session checkpoint
+    # This enables multi-turn memory across goals within the same session
+    prior_messages = []
+    if session.session_memory_k > 0:
+        try:
+            prior_state = await session.graph.aget_state(config={
+                "configurable": {"thread_id": session.thread_id}
+            })
+            if prior_state and prior_state.values:
+                all_msgs = prior_state.values.get("messages", [])
+                if all_msgs:
+                    # Trim to last k messages using langchain trim_messages
+                    from langchain_core.messages import trim_messages, SystemMessage
+                    trimmed = trim_messages(
+                        all_msgs,
+                        max_tokens=session.session_memory_k,
+                        token_counter=len,  # count by message count, not tokens
+                        strategy="last",
+                        allow_partial=False,
+                    )
+                    prior_messages = trimmed
+                    logger.info("session_memory_loaded",
+                                total_msgs=len(all_msgs),
+                                trimmed_to=len(prior_messages),
+                                k=session.session_memory_k)
+        except Exception as e:
+            logger.debug("no_prior_state", reason=str(e)[:50])
+
+    # Create initial state with prior conversation context
     initial_state = create_initial_state(
         goal_text=goal,
         page_context=page_context,
         model_name=model_name,
         api_keys=api_keys,
+        prior_messages=prior_messages,
     )
     # Create streaming callback to push LLM tokens to WebSocket in real-time
     streaming_handler = WebSocketStreamingHandler(ws, session.session_id)

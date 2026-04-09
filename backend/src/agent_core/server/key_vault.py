@@ -22,6 +22,7 @@ class ProviderKeys(BaseModel):
 
     openai_api_key: SecretStr = SecretStr("")
     groq_api_key: SecretStr = SecretStr("")
+    openrouter_api_key: SecretStr = SecretStr("")
     ollama_base_url: str = "http://localhost:11434"
     preferred_provider: str = ""
     preferred_model: str = ""
@@ -99,6 +100,7 @@ class KeyVault:
             "providers": {
                 "openai": bool(keys.openai_api_key.get_secret_value()),
                 "groq": bool(keys.groq_api_key.get_secret_value()),
+                "openrouter": bool(keys.openrouter_api_key.get_secret_value()),
                 "ollama": bool(keys.ollama_base_url),
             },
             "preferred_provider": keys.preferred_provider,
@@ -127,6 +129,8 @@ class KeyVault:
             providers.append("openai")
         if keys.groq_api_key.get_secret_value():
             providers.append("groq")
+        if keys.openrouter_api_key.get_secret_value():
+            providers.append("openrouter")
         if keys.ollama_base_url:
             providers.append("ollama")
         return providers

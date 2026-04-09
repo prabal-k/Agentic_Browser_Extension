@@ -72,6 +72,16 @@ class Settings(BaseSettings):
         description="Default Groq model name"
     )
 
+    # OpenRouter configuration (OpenAI-compatible proxy for 300+ models)
+    openrouter_api_key: SecretStr = Field(
+        default="",
+        description="OpenRouter API key (sk-or-v1-...)"
+    )
+    openrouter_model: str = Field(
+        default="meta-llama/llama-3.3-70b-instruct:free",
+        description="Default OpenRouter model name"
+    )
+
     # Agent configuration
     max_iterations: int = Field(
         default=25,
@@ -122,6 +132,8 @@ class Settings(BaseSettings):
             f"  OpenAI Model:  {self.openai_model}\n"
             f"  Groq Key:      {_mask(self.groq_api_key)}\n"
             f"  Groq Model:    {self.groq_model}\n"
+            f"  OpenRouter Key: {_mask(self.openrouter_api_key)}\n"
+            f"  OpenRouter Model: {self.openrouter_model}\n"
             f"  Max Iterations: {self.max_iterations}\n"
             f"  Auto Confirm:  {self.auto_confirm}\n"
             f"  Log Level:     {self.log_level}\n"

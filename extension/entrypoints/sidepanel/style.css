@@ -586,6 +586,11 @@ body {
   border-radius: 4px;
   flex-shrink: 0;
 }
+.s-hint {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
 .s-row input, .s-row select {
   flex: 1;
   padding: 5px 8px;

@@ -507,6 +507,7 @@ def create_initial_state(
     auto_confirm: bool = False,
     confidence_threshold: float = 0.6,
     api_keys: dict | None = None,
+    prior_messages: list | None = None,
 ) -> AgentState:
     """Create a fresh AgentState for a new task.
 
@@ -547,8 +548,8 @@ def create_initial_state(
         # Memory
         task_memory=TaskMemory(),
 
-        # Messages
-        messages=[],
+        # Messages — include prior conversation context for multi-turn memory
+        messages=prior_messages or [],
 
         # Control
         cognitive_status=CognitiveStatus.ANALYZING_GOAL,

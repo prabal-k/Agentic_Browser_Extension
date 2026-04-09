@@ -544,6 +544,9 @@ export default defineBackground(() => {
           if (message.modelOverride) {
             payload.model_override = message.modelOverride;
           }
+          if (message.sessionMemoryK !== undefined) {
+            payload.session_memory_k = message.sessionMemoryK;
+          }
           sendToServer(payload);
           if (!hasElements) {
             broadcastToSidePanel({

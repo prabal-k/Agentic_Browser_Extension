@@ -388,6 +388,8 @@ async def analyze_and_plan(state: AgentState) -> dict:
         "current_reasoning": reasoning,
         "pending_user_input": auto_nav_url,  # Reuse this field for auto-navigate
         "pending_input_field_type": "auto_navigate" if auto_nav_url else "",
+        # Store user's goal as a message for session memory across goals
+        "messages": [HumanMessage(content=goal_text)],
     }
 
 
@@ -926,6 +928,19 @@ async def decide_action(state: AgentState) -> dict:
     template = detect_task_pattern(goal.original_text)
     output_hint = template["output_hint"] if template else ""
 
+    # Build conversation history from prior messages (session memory)
+    conversation_context = ""
+    prior_msgs = state.get("messages", [])
+    if prior_msgs:
+        conv_lines = []
+        for msg in prior_msgs:
+            role = "User" if hasattr(msg, "type") and msg.type == "human" else "Agent"
+            content = (msg.content or "")[:300]
+            if content:
+                conv_lines.append(f"{role}: {content}")
+        if conv_lines:
+            conversation_context = "\nPrior conversation:\n" + "\n".join(conv_lines[-6:]) + "\n"
+
     prompt = ACTION_DECISION_PROMPT.format(
         goal=original_task,
         reasoning=latest_reasoning or "First action — start working on the task.",
@@ -933,6 +948,10 @@ async def decide_action(state: AgentState) -> dict:
         action_history=format_action_history(action_history, max_entries=5),
         output_format_hint=f"\n{output_hint}\n" if output_hint else "",
     )
+
+    # Inject conversation history before the prompt if available
+    if conversation_context:
+        prompt = conversation_context + "\n" + prompt
 
     response = await llm.ainvoke([
         SystemMessage(content=SYSTEM_ACTION_DECISION),
@@ -1024,9 +1043,17 @@ async def decide_action(state: AgentState) -> dict:
 
         # For read_page, inject the __READ_PAGE__ marker
         # BUT: if the goal asks for structured/exportable data, use extract_listings instead
+        # AND: if the goal requires image/visual analysis, redirect to visual_check instead
         if tool_name == "read_page":
             template = detect_task_pattern(goal.original_text)
-            if template and template["name"] in ("data_extraction", "price_check"):
+            if template and template["name"] == "image_analysis":
+                logger.info("read_page_to_visual_check",
+                            msg="Goal requires image analysis — upgrading read_page to visual_check")
+                tool_name = "visual_check"
+                action_type = ActionType.TAKE_SCREENSHOT
+                desc = args.get("description", goal.original_text[:200])
+                args["value"] = f"__VISUAL_CHECK__|{desc}"
+            elif template and template["name"] in ("data_extraction", "price_check"):
                 logger.info("read_page_to_extract_listings",
                             msg="Goal requires structured data — upgrading read_page to extract_listings")
                 tool_name = "extract_listings"
@@ -1691,6 +1718,32 @@ async def self_critique_action(state: AgentState) -> dict:
                     "iteration_count": iteration,
                 }
 
+    # Auto-complete after successful visual_check for image_analysis tasks —
+    # the vision model response IS the answer; no need for further actions.
+    if action_history:
+        last_action = action_history[-1]
+        last_value = str(last_action.get("action", {}).get("value", ""))
+        last_status = last_action.get("result", {}).get("status", "")
+        extracted = last_action.get("result", {}).get("extracted_data", "")
+        goal = state.get("goal", Goal(original_text=""))
+        template = detect_task_pattern(goal.original_text)
+
+        if ("__VISUAL_CHECK__" in last_value
+                and last_status == "success"
+                and isinstance(extracted, str) and len(extracted) > 30
+                and not extracted.startswith("data:image")
+                and template and template["name"] == "image_analysis"):
+            logger.info("visual_check_auto_done",
+                        msg="Image analysis complete via visual_check — auto-finishing")
+            return {
+                "cognitive_status": CognitiveStatus.DECIDING,
+                "current_reasoning": (
+                    f"Visual analysis complete. The vision model reported: {extracted[:500]}. "
+                    "You now have the visual evidence needed. Call done() with your finding — "
+                    "clearly state whether evidence of vape/tobacco/e-cigarette products was found or not."
+                ),
+            }
+
     # --- Strategy Escalation ---
     # When extraction fails repeatedly, escalate to a different strategy instead of giving up.
     # Escalation ladder: read_page → scroll + read_page → visual_check → different site → report partial
@@ -1795,6 +1848,35 @@ async def self_critique_action(state: AgentState) -> dict:
                             "cognitive_status": CognitiveStatus.COMPLETED,
                             "should_terminate": True,
                         }
+
+    # Detect unproductive scrolls: 2+ consecutive scrolls without meaningful action between them.
+    # Auto-trigger visual_check so the agent can SEE the page layout instead of scrolling blindly.
+    if len(action_history) >= 2:
+        last_two_types = [e.get("action", {}).get("action_type", "") for e in action_history[-2:]]
+        both_scroll = all(t in ("scroll_down", "scroll_up") for t in last_two_types)
+        recent_visual = any(
+            "__VISUAL_CHECK__" in str(e.get("action", {}).get("value", ""))
+            for e in action_history[-4:]
+        )
+        if both_scroll and not recent_visual:
+            goal = state.get("goal", Goal(original_text=""))
+            logger.info("unproductive_scroll_visual",
+                        msg="2 consecutive scrolls — auto-triggering visual_check")
+            auto_action = Action(
+                action_id=f"act_{uuid.uuid4().hex[:8]}",
+                action_type=ActionType.TAKE_SCREENSHOT,
+                value=f"__VISUAL_CHECK__|I've been scrolling but can't find what I need. "
+                      f"What is currently visible on screen? What should I click or do next "
+                      f"to complete: {goal.original_text[:150]}",
+                description="Visual check after unproductive scrolls",
+                confidence=1.0,
+                requires_confirmation=False,
+            )
+            return {
+                "current_action": auto_action,
+                "cognitive_status": CognitiveStatus.EXECUTING,
+                "iteration_count": iteration,
+            }
 
     # Detect stuck loop: 3+ actions with no URL change and same action type repeated
     if len(action_history) >= 3:

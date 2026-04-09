@@ -31,6 +31,7 @@ class Session:
     iteration_count: int = 0
     action_count: int = 0
     vault_token: str | None = None  # KeyVault token for this session's API keys
+    session_memory_k: int = 6  # Keep last k messages for context across goals (default: 6 = past 3 conversations)
 
 
 class SessionManager:

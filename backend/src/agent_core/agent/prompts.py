@@ -101,13 +101,14 @@ SYSTEM_ACTION_DECISION = """Browser agent. Call exactly one tool. Be decisive, n
 Rules:
 - Pick the best element_id. After typing, set submit=True for search fields.
 - Don't repeat failed actions. Move to the next step when current one succeeds.
-- read_page = DOM text. visual_check = screenshot to vision AI. Use visual_check for images.
+- read_page = DOM text. visual_check = screenshot to vision AI. Use visual_check for images AND when you're unsure about page layout (what's sidebar vs main content, where products are, what buttons look like).
 - extract_listings = structured JSON from product grids/search results/cards. Use when you need prices, names, URLs, images from listing pages instead of raw text.
 - done(summary): include actual findings/answer, not just "task completed". NEVER call done() without first gathering data using read_page, extract_listings, or extract_text.
 - Never use ask_user unless you need a password or personal info not on the page.
 - Keep description SHORT (under 15 words).
 - MODALS/DIALOGS/OVERLAYS: If the page has a modal, popup, dialog, overlay, or toast blocking the main content, handle it FIRST before doing anything else. Pick a reasonable option (select first/default item, accept, confirm, dismiss) that lets you proceed. Do NOT try to interact with elements behind a modal — they will timeout.
-- STUCK NAVIGATION: If clicking a nav link/button 2+ times hasn't changed the page, STOP clicking it. Instead: use navigate() to go to the URL directly (construct it from the link text, e.g. /routes, /settings, /dashboard), or try a different element that serves the same purpose."""
+- STUCK NAVIGATION: If clicking a nav link/button 2+ times hasn't changed the page, STOP clicking it. Instead: use navigate() to go to the URL directly (construct it from the link text, e.g. /routes, /settings, /dashboard), or try a different element that serves the same purpose.
+- DON'T SCROLL BLINDLY: If scrolling doesn't reveal what you need, STOP scrolling. Use visual_check to see the page layout, or use the search bar, or click a category/link instead."""
 
 SYSTEM_EVALUATION = """Evaluate the last browser action. Be brief. Respond only with valid JSON."""
 
@@ -601,6 +602,21 @@ RESPONSE_TEMPLATES = {
                      "json", "in excel", "in csv", "in pdf", "download", "excel file"],
         "output_hint": "When calling done(), use extract_listings tool first if available, then provide structured JSON data.",
         "structured_keys": ["items"],
+    },
+    "image_analysis": {
+        "patterns": ["analyze the image", "analyze the photo", "check the image", "check the photo",
+                     "business image", "business photo", "storefront photo", "exterior signage",
+                     "visual indicator", "product display", "vape product", "tobacco product",
+                     "e-cigarette", "sells vape", "sells tobacco", "photos associated",
+                     "signage mentioning", "photo showing", "visible in", "images associated"],
+        "output_hint": (
+            "CRITICAL: This task requires VISUAL analysis of images/photos. "
+            "You MUST use the visual_check tool (NOT read_page) to take a screenshot and analyze what is visually visible. "
+            "read_page can only read DOM text — it CANNOT see images, photos, signage, or product displays. "
+            "Steps: 1) Use visual_check with a specific question about what to look for. "
+            "2) Based on the vision response, call done() with your finding."
+        ),
+        "structured_keys": ["finding", "evidence", "confidence"],
     },
 }
 

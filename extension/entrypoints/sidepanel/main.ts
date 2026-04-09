@@ -34,6 +34,7 @@ const saveUrlBtn = document.getElementById('save-url-btn')!;
 // New settings elements
 const openaiKeyInput = document.getElementById('openai-key-input') as HTMLInputElement;
 const groqKeyInput = document.getElementById('groq-key-input') as HTMLInputElement;
+const openrouterKeyInput = document.getElementById('openrouter-key-input') as HTMLInputElement;
 const ollamaUrlInput = document.getElementById('ollama-url-input') as HTMLInputElement;
 const saveKeysBtn = document.getElementById('save-keys-btn')!;
 const providerSelect = document.getElementById('provider-select') as HTMLSelectElement;
@@ -63,6 +64,7 @@ async function submitKeys(): Promise<void> {
 
   if (openaiKeyInput.value.trim()) body.openai_api_key = openaiKeyInput.value.trim();
   if (groqKeyInput.value.trim()) body.groq_api_key = groqKeyInput.value.trim();
+  if (openrouterKeyInput.value.trim()) body.openrouter_api_key = openrouterKeyInput.value.trim();
   if (ollamaUrlInput.value.trim()) body.ollama_base_url = ollamaUrlInput.value.trim();
   if (providerSelect.value) body.preferred_provider = providerSelect.value;
   if (modelSelect.value) body.preferred_model = modelSelect.value;
@@ -584,7 +586,10 @@ sendBtn.addEventListener('click', () => {
 
   // Include selected model as override
   const modelOverride = modelSelect.value || customModelInput.value.trim() || undefined;
-  chrome.runtime.sendMessage({ type: 'sp_send_goal', goal, modelOverride });
+  // Include session memory setting
+  const memoryKInput = document.getElementById('session-memory-k') as HTMLInputElement;
+  const sessionMemoryK = memoryKInput ? parseInt(memoryKInput.value) || 6 : 6;
+  chrome.runtime.sendMessage({ type: 'sp_send_goal', goal, modelOverride, sessionMemoryK });
 });
 
 goalInput.addEventListener('keydown', (e) => {

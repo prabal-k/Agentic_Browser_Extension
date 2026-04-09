@@ -91,6 +91,10 @@
           <input type="password" id="groq-key-input" placeholder="Groq key (gsk_...)" autocomplete="off" />
         </div>
         <div class="s-row">
+          <span class="s-icon">R</span>
+          <input type="password" id="openrouter-key-input" placeholder="OpenRouter key (sk-or-v1-...)" autocomplete="off" />
+        </div>
+        <div class="s-row">
           <span class="s-icon">L</span>
           <input type="text" id="ollama-url-input" placeholder="Ollama URL (http://localhost:11434)" />
         </div>
@@ -105,6 +109,7 @@
             <option value="">Auto-detect</option>
             <option value="openai">OpenAI</option>
             <option value="groq">Groq</option>
+            <option value="openrouter">OpenRouter</option>
             <option value="ollama">Ollama</option>
           </select>
           <select id="model-select">
@@ -114,6 +119,16 @@
         <div class="s-row">
           <input type="text" id="custom-model-input" placeholder="Custom model name..." />
           <button id="add-model-btn" class="s-btn">Add</button>
+        </div>
+      </div>
+
+      <!-- Session Memory -->
+      <div class="s-group">
+        <div class="s-label">Session Memory</div>
+        <div class="s-row">
+          <span class="s-hint">Keep last</span>
+          <input type="number" id="session-memory-k" value="6" min="0" max="50" style="width: 50px; text-align: center;" />
+          <span class="s-hint">messages (0 = off)</span>
         </div>
       </div>
     </div>

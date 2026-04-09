@@ -28,6 +28,7 @@ class LLMProvider(str, Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     GROQ = "groq"
+    OPENROUTER = "openrouter"
 
 
 # Groq models use OpenAI-compatible API
@@ -38,11 +39,21 @@ def detect_provider(model_name: str) -> LLMProvider:
     """Detect which provider to use based on model name.
 
     Convention:
+    - Names containing '/' (org/model pattern) → OpenRouter
     - Names containing 'gpt', 'o1', 'o3' → OpenAI
     - Names matching Groq patterns → Groq
     - Everything else → Ollama (local models)
     """
     name_lower = model_name.lower()
+
+    # OpenRouter: models use org/model format (e.g., meta-llama/llama-3.3-70b-instruct:free)
+    openrouter_orgs = ("meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/",
+                       "anthropic/", "openai/gpt-oss", "z-ai/", "arcee-ai/",
+                       "stepfun/", "minimax/")
+    if any(name_lower.startswith(org) for org in openrouter_orgs):
+        return LLMProvider.OPENROUTER
+    if ":free" in name_lower:  # Any model ending in :free is OpenRouter
+        return LLMProvider.OPENROUTER
 
     openai_patterns = ("gpt-", "o1", "o3", "chatgpt")
     if any(pattern in name_lower for pattern in openai_patterns):
@@ -107,6 +118,24 @@ def get_llm(
             temperature=temperature,
             streaming=streaming,
             api_key=api_key,
+        )
+
+    elif provider == LLMProvider.OPENROUTER:
+        api_key = keys.get("openrouter_api_key") or settings.openrouter_api_key.get_secret_value()
+        if not api_key:
+            raise ValueError(
+                "No API key configured for OpenRouter. "
+                "Enter a key in the extension settings or set AGENT_OPENROUTER_API_KEY in .env."
+            )
+        llm = ChatOpenAI(
+            model=model_name,
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+            temperature=temperature,
+            streaming=streaming,
+            default_headers={
+                "X-Title": "Agentic Browser Extension",
+            },
         )
 
     else:
