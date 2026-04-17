@@ -147,10 +147,26 @@ async def handle_websocket(
                    message=f"Connected. Session: {session.session_id}",
                    session_id=session.session_id)
 
+    MAX_MESSAGE_SIZE = 5 * 1024 * 1024  # 5MB
+
     try:
         while True:
             # Wait for client message
             raw = await ws.receive_json()
+
+            # Validate message size to prevent OOM
+            import sys
+            msg_size = sys.getsizeof(str(raw))
+            if msg_size > MAX_MESSAGE_SIZE:
+                logger.warning("message_too_large",
+                               size=msg_size,
+                               max=MAX_MESSAGE_SIZE,
+                               session_id=session.session_id)
+                await send_msg(ws, "server_error",
+                               message=f"Message too large ({msg_size // 1024}KB). Maximum is 5MB.",
+                               recoverable=True)
+                continue
+
             msg_type = raw.get("type", "")
 
             if msg_type == WSMessageType.CLIENT_GOAL.value:
@@ -164,8 +180,22 @@ async def handle_websocket(
                                session_id=session.session_id)
 
             elif msg_type == WSMessageType.CLIENT_DOM_UPDATE.value:
-                # Update DOM snapshot mid-task (e.g., page changed)
-                logger.info("dom_update_received", session_id=session.session_id)
+                # Parse and store DOM update so the next graph node gets fresh context
+                dom_data = raw.get("dom_snapshot")
+                if dom_data:
+                    try:
+                        parsed_ctx = PageContext.model_validate(dom_data)
+                        session.pending_dom_update = parsed_ctx
+                        logger.info("dom_update_stored",
+                                    session_id=session.session_id,
+                                    url=parsed_ctx.url[:60],
+                                    elements=len(parsed_ctx.elements))
+                    except Exception as e:
+                        logger.warning("dom_update_parse_failed",
+                                       session_id=session.session_id,
+                                       error=str(e)[:100])
+                else:
+                    logger.info("dom_update_empty", session_id=session.session_id)
 
             else:
                 await send_msg(ws, "server_error",
@@ -224,6 +254,14 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
     api_keys = None
     if session.vault_token:
         vault_keys = key_vault.get_keys(session.vault_token)
+        if vault_keys is None:
+            logger.warning("vault_token_invalid",
+                           msg="Session token is stale or expired — keys not found. "
+                               "Re-submit API keys from the extension settings.",
+                           token_prefix=session.vault_token[:8])
+            await send_msg(ws, "server_warning",
+                           message="Your API key session has expired (server may have restarted). "
+                                   "Please re-submit your API keys in Settings.")
         if vault_keys:
             api_keys = {}
             openai_key = vault_keys.openai_api_key.get_secret_value()
@@ -323,22 +361,27 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
 
     try:
         while session.is_running:
-            # Stream graph execution with pre-node status updates
-            async for event in session.graph.astream(current_input, config=config, stream_mode="updates"):
-                if not session.is_running:
-                    break
+            try:
+                # Stream graph execution with pre-node status updates
+                async for event in session.graph.astream(current_input, config=config, stream_mode="updates"):
+                    if not session.is_running:
+                        break
 
-                for node_name, node_output in event.items():
-                    if node_name == "__end__":
-                        continue
+                    for node_name, node_output in event.items():
+                        if node_name == "__end__":
+                            continue
 
-                    if isinstance(node_output, dict):
-                        await _stream_node_output(ws, session, node_name, node_output)
+                        if isinstance(node_output, dict):
+                            await _stream_node_output(ws, session, node_name, node_output)
+
+            except GraphInterrupt:
+                # Explicit GraphInterrupt raised mid-stream — handle and re-enter loop
+                logger.info("graph_interrupt_caught", session_id=session.session_id)
 
             if not session.is_running:
                 break
 
-            # Check for pending interrupts after stream ends
+            # Check for pending interrupts after stream ends (or GraphInterrupt)
             state = await session.graph.aget_state(config)
             interrupt_data = _extract_interrupt(state)
 
@@ -353,17 +396,6 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
 
             # No interrupt — graph completed
             break
-
-    except GraphInterrupt:
-        # Explicit GraphInterrupt — handle same as stream-end interrupt
-        state = await session.graph.aget_state(config)
-        interrupt_data = _extract_interrupt(state)
-        if interrupt_data:
-            resume_value = await _handle_interrupt(ws, session, interrupt_data)
-            if resume_value is not None:
-                current_input = Command(resume=resume_value)
-                # Continue the loop? No — we need to re-enter the while loop
-                # This case is rare; the stream-end check handles most interrupts
 
     except WebSocketDisconnect:
         logger.info("client_disconnected_during_task", session_id=session.session_id)
@@ -480,8 +512,26 @@ async def _stream_node_output(
 
     # Reasoning
     if "current_reasoning" in output and output["current_reasoning"]:
+        reasoning_text = str(output["current_reasoning"])[:2000]
+        # Clean raw JSON that sometimes leaks from Qwen reasoning output
+        if reasoning_text.lstrip().startswith("{") or reasoning_text.lstrip().startswith("```"):
+            import json as _json
+            try:
+                parsed = _json.loads(reasoning_text.strip().strip("`").strip("json").strip())
+                # Extract just the human-readable thought
+                reasoning_text = parsed.get("thought", parsed.get("reasoning", str(parsed)[:300]))
+            except Exception:
+                # Strip JSON/markdown artifacts but keep the text
+                reasoning_text = reasoning_text.replace("```json", "").replace("```", "").strip()
+                if reasoning_text.startswith("{"):
+                    # Still JSON — try to extract just the thought field
+                    import re
+                    match = re.search(r'"thought"\s*:\s*"([^"]*)"', reasoning_text)
+                    if match:
+                        reasoning_text = match.group(1)
+
         await send_msg(ws, "server_reasoning",
-                       content=str(output["current_reasoning"])[:2000],
+                       content=reasoning_text,
                        reasoning_type="thinking",
                        is_streaming=False,
                        is_final=True,
@@ -693,6 +743,14 @@ async def _handle_interrupt(
 
                 if new_dom:
                     response["new_dom"] = new_dom
+                elif session.pending_dom_update:
+                    # Use pending DOM update from CLIENT_DOM_UPDATE if no new DOM in action result
+                    try:
+                        response["new_dom"] = session.pending_dom_update.model_dump()
+                        logger.info("pending_dom_applied", session_id=session.session_id)
+                    except Exception:
+                        pass
+                    session.pending_dom_update = None
                 return response
 
             elif msg_type == WSMessageType.CLIENT_CANCEL.value:
@@ -781,6 +839,48 @@ async def _send_done(ws: WebSocket, session: Session, final_values: dict) -> Non
                         source=export_result["source"])
     except Exception as e:
         logger.warning("export_detection_failed", error=str(e))
+
+    # Save task to persistent memory and learn site patterns
+    try:
+        from agent_core.memory.store import get_memory, extract_domain
+        import time as _time
+
+        domain = ""
+        page_ctx = final_values.get("page_context")
+        if page_ctx and getattr(page_ctx, "url", ""):
+            domain = extract_domain(page_ctx.url)
+        elif final_values.get("goal") and getattr(final_values.get("goal"), "original_text", ""):
+            # Try extracting domain from goal text URLs
+            goal_text = final_values["goal"].original_text
+            import re as _re
+            url_match = _re.search(r"https?://[^\s]+", goal_text)
+            if url_match:
+                domain = extract_domain(url_match.group())
+
+        mem = get_memory()
+        duration = _time.time() - session.created_at if session.created_at else 0
+        goal_text = getattr(final_values.get("goal"), "original_text", session.current_goal)
+
+        mem.save_task(
+            session_id=session.session_id,
+            goal=goal_text,
+            domain=domain,
+            success=success,
+            total_actions=session.action_count,
+            duration_seconds=round(duration, 1),
+            summary=summary[:500],
+            failure_reason="" if success else (final_values.get("error") or "Task incomplete"),
+        )
+
+        # Learn site patterns from action history
+        action_history = final_values.get("action_history", [])
+        if domain and action_history:
+            mem.learn_from_task(domain, success, action_history,
+                                failure_reason="" if success else "Task incomplete")
+
+        logger.info("memory_task_saved", domain=domain, success=success, actions=session.action_count)
+    except Exception as e:
+        logger.warning("memory_save_failed", error=str(e)[:100])
 
     await send_msg(ws, "server_done",
                    success=success,

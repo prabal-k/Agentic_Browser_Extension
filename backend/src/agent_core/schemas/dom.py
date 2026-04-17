@@ -181,13 +181,15 @@ class DOMElement(BaseModel):
             elif len(href) <= 40:
                 parts.append(f'href="{href}"')
 
-        # State — only show non-default states (focused is notable, visible/enabled are assumed)
+        # State — show notable states (defaults: visible, enabled, not focused)
         if self.is_focused:
             parts.append("*focused")
+        if not self.is_enabled:
+            parts.append("*disabled")
 
         # Container tag — helps LLM distinguish wrappers from leaf elements
         if not self.is_leaf and self.children_count > 0:
-            parts.append("[container]")
+            parts.append(f"[container:{self.children_count}]")
 
         # Parent context — compressed
         if self.parent_context:

@@ -71,6 +71,7 @@ from agent_core.agent.prompts import (
     detect_task_pattern,
 )
 from agent_core.agent.llm_client import get_reasoning_llm, get_action_llm, get_action_llm_dynamic
+from agent_core.memory.store import get_memory, extract_domain
 
 logger = structlog.get_logger("agent.nodes")
 
@@ -341,6 +342,22 @@ async def analyze_and_plan(state: AgentState) -> dict:
     word_count = len(goal_text.split())
     complexity = "simple" if word_count < 15 else "medium" if word_count < 40 else "complex"
 
+    # Detect user-requested output format
+    goal_lower = goal_text.lower()
+    output_format = ""
+    format_patterns = {
+        "json": ("as json", "in json", "json format", "return json", "output json"),
+        "csv": ("as csv", "in csv", "csv format", "return csv", "output csv"),
+        "table": ("as table", "as a table", "in table", "table format", "in tabular"),
+        "bullets": ("as bullet", "bullet point", "bulleted list", "as bullets"),
+        "numbered": ("as numbered", "numbered list", "as a list"),
+    }
+    for fmt, patterns in format_patterns.items():
+        if any(p in goal_lower for p in patterns):
+            output_format = fmt
+            logger.info("output_format_detected", format=fmt)
+            break
+
     # Build goal with original text preserved — no rewriting
     goal = Goal(
         original_text=goal_text,
@@ -350,6 +367,7 @@ async def analyze_and_plan(state: AgentState) -> dict:
         constraints=["Never submit payment without user confirmation", "Never interact with ads"],
         complexity=complexity,
         is_achievable=True,
+        output_format=output_format,
     )
 
     # Build a minimal plan — just the first obvious action
@@ -381,6 +399,22 @@ async def analyze_and_plan(state: AgentState) -> dict:
         reasoning = f"Auto-navigating to: {target_url}"
         logger.info("auto_navigate_queued", url=target_url)
 
+    # Load persistent memory for the target domain
+    site_memory_text = ""
+    try:
+        domain = ""
+        if target_url:
+            domain = extract_domain(target_url)
+        elif page_context and getattr(page_context, "url", ""):
+            domain = extract_domain(page_context.url)
+        if domain:
+            mem = get_memory()
+            site_memory_text = mem.format_for_prompt(domain)
+            if site_memory_text:
+                logger.info("memory_loaded", domain=domain, length=len(site_memory_text))
+    except Exception as e:
+        logger.warning("memory_load_failed", error=str(e)[:100])
+
     return {
         "goal": goal,
         "plan": plan,
@@ -390,6 +424,10 @@ async def analyze_and_plan(state: AgentState) -> dict:
         "pending_input_field_type": "auto_navigate" if auto_nav_url else "",
         # Store user's goal as a message for session memory across goals
         "messages": [HumanMessage(content=goal_text)],
+        # Persistent memory context for prompts (stored in task_memory.discovered_patterns)
+        "task_memory": TaskMemory(
+            discovered_patterns=[site_memory_text] if site_memory_text else [],
+        ),
     }
 
 
@@ -798,6 +836,32 @@ async def decide_action(state: AgentState) -> dict:
                 "pending_input_field_type": "",
             }
 
+    # --- FAST PATH: Execute queued action (no LLM call) ---
+    # If a previous cycle queued predictable follow-up actions, execute the next one.
+    queued = state.get("_queued_actions", [])
+    if queued:
+        next_action_dict = queued[0]
+        remaining = queued[1:]
+        logger.info("queued_action_executing",
+                     action_type=next_action_dict.get("action_type"),
+                     remaining=len(remaining))
+        action = Action(
+            action_id=f"act_{uuid.uuid4().hex[:8]}",
+            action_type=ActionType(next_action_dict["action_type"]),
+            element_id=next_action_dict.get("element_id"),
+            value=next_action_dict.get("value", ""),
+            description=next_action_dict.get("description", "Auto-chained action"),
+            confidence=1.0,
+            requires_confirmation=False,
+            risk_level="low",
+        )
+        return {
+            "current_action": action,
+            "cognitive_status": CognitiveStatus.EXECUTING,
+            "_queued_actions": remaining,
+            "current_reasoning": next_action_dict.get("reasoning", ""),
+        }
+
     # --- FAST PATH: Auto-type ALL stored credentials at once ---
     # If the user provided credentials via interrupt, type them ALL into
     # the matching fields using JavaScript — no LLM call needed.
@@ -832,8 +896,13 @@ async def decide_action(state: AgentState) -> dict:
                     el_type = attrs.get("type", "").lower()
                     el_name = attrs.get("name", "").lower()
                     el_placeholder = attrs.get("placeholder", "").lower()
+                    # Also check aria-label for modern SPA forms
+                    el_aria = attrs.get("aria-label", "").lower()
 
-                    if matcher(el_type, el_name, el_placeholder) and el.is_enabled:
+                    if not el.is_enabled:
+                        continue
+
+                    if matcher(el_type, el_name, el_placeholder) or matcher(el_type, el_aria, el_placeholder):
                         logger.info("auto_type_credential",
                                     field_type=field_type,
                                     element_id=el.element_id)
@@ -853,14 +922,49 @@ async def decide_action(state: AgentState) -> dict:
                         updated_creds = dict(stored_creds)
                         updated_creds.pop(field_type, None)
 
+                        # Remove this credential and check what's next
+                        remaining_creds = [k for k in updated_creds if updated_creds[k]]
+                        queued = []
+
+                        if not remaining_creds:
+                            # All credentials typed — auto-queue click on submit button
+                            submit_keywords = ("sign in", "log in", "login", "submit", "continue", "next")
+                            for btn in page_ctx.elements:
+                                btn_text = (btn.text or "").lower().strip()
+                                btn_type = btn.attributes.get("type", "").lower()
+                                btn_tag = btn.tag_name.lower() if btn.tag_name else ""
+                                is_submit = (
+                                    btn_type == "submit"
+                                    or (btn_tag in ("button", "a", "input") and any(kw in btn_text for kw in submit_keywords))
+                                )
+                                if is_submit and btn.is_enabled:
+                                    queued.append({
+                                        "action_type": ActionType.CLICK.value,
+                                        "element_id": btn.element_id,
+                                        "description": f"Click '{btn_text}' to submit login",
+                                        "reasoning": "All credentials entered — submitting the login form.",
+                                    })
+                                    logger.info("auto_queue_submit",
+                                                element_id=btn.element_id,
+                                                text=btn_text[:30])
+                                    break
+
+                        next_hint = (
+                            f"Typed {field_type}. "
+                            + (f"Still need: {', '.join(remaining_creds)}." if remaining_creds
+                               else "All credentials entered — submitting login form.")
+                        )
+
                         return {
                             "current_action": action,
                             "cognitive_status": CognitiveStatus.EXECUTING,
                             "pending_user_input": "",
                             "pending_input_field_type": "",
                             "_stored_credentials": updated_creds,
+                            "_queued_actions": queued,
+                            "current_reasoning": next_hint,
                         }
-                    break  # Only try first matching element per field type
+                    # Keep scanning — the right field may be further down the page
 
     # Smart model routing: use fast model for simple actions, main model for complex
     from agent_core.config import settings as _settings
@@ -929,21 +1033,38 @@ async def decide_action(state: AgentState) -> dict:
     output_hint = template["output_hint"] if template else ""
 
     # Build conversation history from prior messages (session memory)
+    # Use generous limits to retain context from in-page chat agents
     conversation_context = ""
     prior_msgs = state.get("messages", [])
     if prior_msgs:
         conv_lines = []
         for msg in prior_msgs:
             role = "User" if hasattr(msg, "type") and msg.type == "human" else "Agent"
-            content = (msg.content or "")[:300]
+            content = (msg.content or "")[:600]  # 600 chars to capture longer chat messages
             if content:
                 conv_lines.append(f"{role}: {content}")
         if conv_lines:
-            conversation_context = "\nPrior conversation:\n" + "\n".join(conv_lines[-6:]) + "\n"
+            conversation_context = "\nPrior conversation:\n" + "\n".join(conv_lines[-10:]) + "\n"
+
+    # Build site memory section from persistent memory
+    site_memory_section = ""
+    try:
+        domain = ""
+        page_ctx = state.get("page_context")
+        if page_ctx and getattr(page_ctx, "url", ""):
+            domain = extract_domain(page_ctx.url)
+        if domain:
+            mem = get_memory()
+            site_mem = mem.format_for_prompt(domain)
+            if site_mem:
+                site_memory_section = f"\n## SITE MEMORY (from past sessions)\n{site_mem}\n"
+    except Exception:
+        pass
 
     prompt = ACTION_DECISION_PROMPT.format(
         goal=original_task,
         reasoning=latest_reasoning or "First action — start working on the task.",
+        site_memory=site_memory_section,
         page_context=page_context_str or "No page loaded.",
         action_history=format_action_history(action_history, max_entries=5),
         output_format_hint=f"\n{output_hint}\n" if output_hint else "",
@@ -1347,6 +1468,24 @@ async def observe(state: AgentState) -> dict:
             "result": _safe_serialize(result),
         })
 
+    # Record action outcome in persistent memory
+    try:
+        domain = ""
+        if curr_ctx and getattr(curr_ctx, "url", ""):
+            domain = extract_domain(curr_ctx.url)
+        if domain and action and result:
+            atype = action.action_type.value if hasattr(action.action_type, "value") else str(action.action_type)
+            context = action.description[:60] if action.description else ""
+            mem = get_memory()
+            mem.record_action(
+                domain=domain,
+                action_type=atype,
+                success=result.status == ActionStatus.SUCCESS,
+                context=context,
+            )
+    except Exception as e:
+        logger.warning("memory_record_action_failed", error=str(e)[:100])
+
     # If this action gathered information, update current_reasoning so
     # the next decide_action knows what was found (P4: findings feed back)
     reasoning_update = {}
@@ -1423,14 +1562,14 @@ async def smart_evaluate(state: AgentState) -> dict:
             logger.info("smart_evaluate_skip", reason="type_success")
             return _build_fast_evaluation(state, plan, action_succeeded=True)
 
-    # Case 5: Click succeeded — check if page changed unexpectedly
+    # Case 5: Click succeeded — check context
     if action_type == ActionType.CLICK:
         if action_succeeded and prev_ctx and curr_ctx:
             prev_url = getattr(prev_ctx, "url", "")
             curr_url = getattr(curr_ctx, "url", "")
-            # If URL changed, might need LLM to assess if it's expected
+
+            # If URL changed, check if it's suspicious
             if prev_url != curr_url:
-                # Check if this is a known redirect pattern (search, error, login)
                 suspicious = any(
                     kw in curr_url.lower()
                     for kw in ("sorry", "captcha", "login", "signin", "error", "blocked")
@@ -1438,6 +1577,14 @@ async def smart_evaluate(state: AgentState) -> dict:
                 if suspicious:
                     logger.info("smart_evaluate_to_llm", reason="suspicious_redirect")
                     return {"cognitive_status": CognitiveStatus.EVALUATING}
+
+            # If this was a submit/confirm/send click, use LLM to verify outcome
+            desc = (action.description or "").lower()
+            submit_words = ("submit", "confirm", "send", "sign in", "log in", "login",
+                            "create", "save", "apply", "start", "proceed", "next", "continue")
+            if any(w in desc for w in submit_words):
+                logger.info("smart_evaluate_to_llm", reason="submit_click_needs_verification")
+                return {"cognitive_status": CognitiveStatus.EVALUATING}
             # Click succeeded, no suspicious redirect → skip evaluate
             logger.info("smart_evaluate_skip", reason="click_success")
             return _build_fast_evaluation(state, plan, action_succeeded=True)
@@ -1743,6 +1890,75 @@ async def self_critique_action(state: AgentState) -> dict:
                     "clearly state whether evidence of vape/tobacco/e-cigarette products was found or not."
                 ),
             }
+
+    # --- Auto-wait after any interaction that expects a page response ---
+    # Covers: chat messages, form submissions, clicking submit/confirm/send buttons,
+    # typing + Enter, or any action that triggers server-side processing.
+    if len(action_history) >= 1:
+        last = action_history[-1]
+        last_type = last.get("action", {}).get("action_type", "")
+        last_value = str(last.get("action", {}).get("value", "")).lower()
+        last_desc = str(last.get("action", {}).get("description", "")).lower()
+        last_status = last.get("result", {}).get("status", "")
+
+        needs_wait = False
+        wait_reason = ""
+
+        # Pattern 1: Typed + submitted (type with |SUBMIT or press_key Enter after type)
+        if last_type == "press_key" and "enter" in last_value and len(action_history) >= 2:
+            prev_type = action_history[-2].get("action", {}).get("action_type", "")
+            if prev_type in ("clear_and_type", "type_text"):
+                needs_wait = True
+                wait_reason = "Sent a message or submitted a form"
+
+        # Pattern 2: Type with auto-submit (|SUBMIT flag)
+        if last_type in ("clear_and_type", "type_text") and "|submit" in last_value:
+            needs_wait = True
+            wait_reason = "Typed and submitted"
+
+        # Pattern 3: Clicked a submit/confirm/send button (in-page form submit only)
+        # Skip if: URL changed (= navigation click), page_changed flag set, or no prev context
+        if last_type == "click" and last_status == "success":
+            page_changed_flag = last.get("result", {}).get("page_changed", False)
+            prev_ctx = state.get("previous_page_context")
+            curr_ctx = state.get("page_context")
+
+            # Determine if this was a navigation (URL changed) vs in-page action
+            is_navigation = page_changed_flag  # Extension reported page change
+            if prev_ctx and curr_ctx:
+                prev_url = getattr(prev_ctx, "url", "")
+                curr_url = getattr(curr_ctx, "url", "")
+                if prev_url and curr_url and prev_url != curr_url:
+                    is_navigation = True
+            elif not prev_ctx:
+                # No previous context = early in the task, likely a navigation click
+                is_navigation = True
+
+            if not is_navigation:
+                submit_words = ("submit", "confirm", "send", "sign in",
+                                "log in", "login", "create", "save", "apply")
+                if any(w in last_desc for w in submit_words):
+                    needs_wait = True
+                    wait_reason = "Clicked a submit-type button"
+
+        if needs_wait:
+            # Don't double-wait — check if the next action is already a wait or read
+            already_waited = (
+                last_type == "wait"
+                or (len(action_history) >= 2 and action_history[-1].get("action", {}).get("action_type") == "wait")
+            )
+            if not already_waited:
+                logger.info("auto_wait_for_response",
+                            msg=f"Inserting wait — {wait_reason}")
+                return {
+                    "cognitive_status": CognitiveStatus.DECIDING,
+                    "iteration_count": iteration,
+                    "current_reasoning": (
+                        f"{wait_reason}. The page may need time to update with a response. "
+                        "Use wait(seconds=3), then read_page to check what changed. "
+                        "If there are new instructions, follow them step by step."
+                    ),
+                }
 
     # --- Strategy Escalation ---
     # When extraction fails repeatedly, escalate to a different strategy instead of giving up.
@@ -2368,27 +2584,39 @@ def _format_findings_with_template(template: dict, summary: str, memory) -> str 
         if not data_parts and not summary:
             return None
 
-        # Build a structured header based on template type
+        # Build a structured output based on template type
         lines = []
-        if template_name == "price_check":
-            lines.append("## Price Check Results")
-            lines.append("Product | Price | Source URL")
-            lines.append("--------|-------|----------")
-        elif template_name == "product_search":
-            lines.append("## Product Search Results")
-            lines.append("Name | Price | Key Detail | URL")
-            lines.append("-----|-------|------------|----")
-        elif template_name == "info_lookup":
-            lines.append("## Information Lookup")
-        elif template_name == "data_extraction":
-            lines.append("## Extracted Data")
 
-        # Append the actual summary content (already contains the findings)
-        lines.append("")
-        lines.append(summary)
+        if template_name == "price_check":
+            lines.append("## Price Check Results\n")
+            lines.append(summary)
+        elif template_name == "product_search":
+            lines.append("## Product Search Results\n")
+            lines.append(summary)
+        elif template_name == "info_lookup":
+            lines.append("## Information Lookup\n")
+            # For info lookup, present as Answer + Evidence
+            lines.append(summary)
+        elif template_name == "data_extraction":
+            lines.append("## Extracted Data\n")
+            lines.append(summary)
+        elif template_name == "image_analysis":
+            lines.append("## Visual Analysis Results\n")
+            lines.append(summary)
+        else:
+            lines.append(summary)
+
+        # Add source info from memory if available
+        if data_parts:
+            source_data = data_parts[0][:200]
+            if source_data not in summary:
+                lines.append(f"\n**Source Data:** {source_data}")
 
         return "\n".join(lines)
-    except Exception:
+    except Exception as e:
+        logger.warning("template_formatting_failed",
+                       template=template.get("name", "unknown"),
+                       error=str(e)[:200])
         return None
 
 
@@ -2399,6 +2627,39 @@ def _format_findings_with_template(template: dict, summary: str, memory) -> str 
 async def finalize(state: AgentState) -> dict:
     """Wrap up the task — generate summary and final evaluation."""
     logger.info("finalize")
+
+    def _apply_output_format(summary: str, findings: list, fmt: str) -> str:
+        """Reformat summary based on user-requested output format."""
+        content = summary
+        if fmt == "json":
+            import json as _json
+            data = {"summary": summary, "findings": findings}
+            return _json.dumps(data, indent=2, ensure_ascii=False)
+        elif fmt == "csv":
+            lines = [f.strip() for f in (findings or [summary.split("\n")]) if f.strip()]
+            return "\n".join(lines)
+        elif fmt == "table":
+            # Convert findings into markdown table
+            rows = []
+            for f in findings:
+                # Split each finding into columns by common delimiters
+                parts = [p.strip() for p in f.replace(" | ", "|").split("|") if p.strip()]
+                if not parts:
+                    parts = [f.strip()]
+                rows.append(parts)
+            if rows:
+                max_cols = max(len(r) for r in rows)
+                header = "| " + " | ".join([f"Col {i+1}" for i in range(max_cols)]) + " |"
+                sep = "| " + " | ".join(["---"] * max_cols) + " |"
+                body = "\n".join("| " + " | ".join(r + [""] * (max_cols - len(r))) + " |" for r in rows)
+                return f"{summary}\n\n{header}\n{sep}\n{body}"
+        elif fmt == "bullets":
+            items = findings if findings else summary.split("\n")
+            return "\n".join(f"• {item.strip()}" for item in items if item.strip())
+        elif fmt == "numbered":
+            items = findings if findings else summary.split("\n")
+            return "\n".join(f"{i+1}. {item.strip()}" for i, item in enumerate(items) if item.strip())
+        return content
 
     plan = state.get("plan", Plan())
     goal = state.get("goal", Goal(original_text=""))
@@ -2417,7 +2678,40 @@ async def finalize(state: AgentState) -> dict:
     done_summary = ""
     last_action = state.get("current_action")
     if last_action and last_action.action_type == ActionType.DONE and last_action.value:
-        done_summary = last_action.value
+        raw_summary = last_action.value
+
+        # Detect if the agent dumped raw page content instead of a real summary.
+        # Page content typically has many short lines, UI labels, marketing copy.
+        # A real summary is 1-3 sentences about what was accomplished.
+        lines = raw_summary.strip().split("\n")
+        short_lines = sum(1 for l in lines if len(l.strip()) < 30 and l.strip())
+        is_page_dump = (
+            len(lines) > 8 and short_lines > len(lines) * 0.5  # Many short lines = UI text
+        )
+
+        if is_page_dump:
+            logger.warning("done_summary_is_page_dump",
+                           msg="Agent dumped page text into done() — replacing with concise summary")
+            # Build a concise summary from action history instead
+            action_hist = state.get("action_history", [])
+            action_descs = [
+                e.get("action", {}).get("description", "")
+                for e in action_hist if e.get("action", {}).get("description")
+            ]
+            page_url = ""
+            page_title = ""
+            page_ctx = state.get("page_context")
+            if page_ctx:
+                page_url = getattr(page_ctx, "url", "")
+                page_title = getattr(page_ctx, "title", "")
+
+            done_summary = (
+                f"Task completed on {page_title or page_url or 'the page'}.\n"
+                f"Actions performed: {', '.join(action_descs[-5:]) or 'multiple browser actions'}.\n"
+                f"Final page: {page_url}"
+            )
+        else:
+            done_summary = raw_summary
 
     # Source 1: task_memory.important_data (vision/read_page results)
     memory = state.get("task_memory", TaskMemory())
@@ -2466,6 +2760,14 @@ async def finalize(state: AgentState) -> dict:
         structured = _format_findings_with_template(template, full_summary, memory)
         if structured:
             full_summary = structured
+
+    # Apply user-requested output format if specified
+    user_format = goal.output_format
+    if user_format and findings:
+        try:
+            full_summary = _apply_output_format(full_summary, findings, user_format)
+        except Exception as e:
+            logger.warning("output_format_failed", format=user_format, error=str(e)[:100])
 
     return {
         "cognitive_status": CognitiveStatus.COMPLETED if success else CognitiveStatus.FAILED,

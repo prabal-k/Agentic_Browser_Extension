@@ -342,24 +342,285 @@ Non-mutating action detected → skip the expensive DOM extraction call
 
 ---
 
+## Task 12: Prompt Engineering Overhaul (Phase 12A)
+
+**Goal:** Replace flat rule-list system prompt with a structured decision framework that helps the LLM make better action decisions.
+
+**Impact:** Better first-try accuracy, fewer stuck loops, works across diverse websites.
+
+### Completed (2026-04-14)
+
+- [x] 12.1: Rewrote `SYSTEM_ACTION_DECISION` — priority-ordered pre-action checklist, element selection guide, tool selection table, task patterns (login/search/multi-step/data), recovery rules
+- [x] 12.2: Cleaned `ACTION_DECISION_PROMPT` — removed duplicated rules, now pure context delivery (goal, reasoning, page state, history)
+- [x] 12.3: Added multi-step flow guidance (wait after submit, read before next step)
+- [x] 12.4: Added login flow guidance (ask_user for credentials, check for "Next" button on split-login pages)
+
+**Files Changed:** `prompts.py` (SYSTEM_ACTION_DECISION, ACTION_DECISION_PROMPT)
+
+---
+
+## Task 13: Credential Auto-Fill & Chat Response Bugs (Phase 12B)
+
+**Goal:** Fix critical bugs preventing login flows and chat-based interactions from working.
+
+**Impact:** Unblocks SellrClub, Bud AI, and any login + in-page chat agent workflow.
+
+### Completed (2026-04-14)
+
+- [x] 13.1: Fixed credential auto-fill `break` bug — was breaking after checking first DOM element regardless of match. Now scans ALL elements and checks `aria-label` for SPA forms. (`nodes.py:863`)
+- [x] 13.2: Added chat response auto-wait — after type→Enter pattern, self_critique injects wait + read guidance so agent doesn't proceed before chat response loads. (`nodes.py:1752`)
+- [x] 13.3: Expanded conversation history — increased from 300→600 char per message and 6→10 message window for multi-turn chat context. (`nodes.py:940`)
+- [x] 13.4: Fixed OpenAI key fallback — `get_llm()` now checks `OPENAI_API_KEY` env var as fallback after `AGENT_OPENAI_API_KEY`. (`llm_client.py:96`)
+- [x] 13.5: Added stale vault token warning — warns user when API key session expired after server restart. (`ws_handler.py:227`)
+
+**Files Changed:** `nodes.py`, `llm_client.py`, `ws_handler.py`, `sidepanel/main.ts`
+
+---
+
+## Task 14: Disabled Element Click Detection
+
+**Goal:** Prevent the agent from clicking disabled/aria-disabled elements and falsely reporting success.
+
+**Impact:** Eliminates silent action failures that cause confusion loops.
+
+### Completed (2026-04-14)
+
+- [x] 14.1: Added `isElementDisabled()` helper — checks `disabled` attr, `aria-disabled="true"`, and parent `<fieldset disabled>`
+- [x] 14.2: Added `isElementVisible()` helper — checks zero dimensions, `display:none`, `visibility:hidden`, `opacity:0`
+- [x] 14.3: Updated `click` handler — returns `element_disabled` or `element_not_visible` with actionable messages
+- [x] 14.4: Updated `select_option`, `check`, `uncheck` handlers — same disabled/not-found checks
+- [x] 14.5: Extension build clean (83.98 KB), backend graph compiles (16 nodes)
+
+**Files Changed:** `extension/entrypoints/content.ts` (added helpers + updated 5 action handlers)
+
+---
+
+## Task 15: iFrame Content Traversal
+
+**Goal:** Extract DOM elements from same-origin iframes so the agent can interact with embedded forms, chat widgets, and payment processors.
+
+**Impact:** Unlocks interaction with embedded content (Stripe checkout, chat widgets, embedded apps).
+
+### Files to Change
+
+| File | Change | Risk |
+|---|---|---|
+| `extension/entrypoints/content.ts` | In `collectElements()`, traverse `<iframe>` elements with same-origin `contentDocument`. Prefix element IDs to avoid collisions. | Medium — cross-origin iframes will throw, need try/catch |
+
+### Subtasks
+
+- [ ] 15.1: In `collectElements()`, detect `<iframe>` elements and attempt `contentDocument` access
+- [ ] 15.2: Recursively extract elements from same-origin iframe documents
+- [ ] 15.3: Prefix iframe element IDs (e.g., `iframe_0_el_5`) to avoid collisions with parent
+- [ ] 15.4: Handle cross-origin iframes gracefully (skip with warning, no crash)
+- [ ] 15.5: Test on a page with same-origin iframe (e.g., embedded form)
+- [ ] 15.6: Test on a page with cross-origin iframe (e.g., YouTube embed) — should skip, not crash
+
+---
+
+## Task 16: WebSocket Reconnection with Backoff
+
+**Goal:** Automatically reconnect the WebSocket when connection drops (network blip, server restart), with exponential backoff.
+
+**Impact:** Network blips no longer kill the task — connection recovers automatically.
+
+### Completed (2026-04-14)
+
+- [x] 16.1: Added reconnection state vars (`reconnectAttempts`, `reconnectTimer`, `intentionalDisconnect`)
+- [x] 16.2: Exponential backoff in `ws.onclose` — 1s, 2s, 4s, 8s, 16s (capped at 30s), max 5 attempts
+- [x] 16.3: `intentionalDisconnect` flag — user clicking Disconnect suppresses auto-reconnect
+- [x] 16.4: On successful `ws.onopen`, reset reconnect attempts to 0
+- [x] 16.5: After 5 failed attempts, show "Connection lost. Click Connect to retry." in sidepanel
+- [x] 16.6: Sidepanel shows "Reconnecting (N/5)..." status with pulsing indicator
+- [x] 16.7: CSS style for `reconnecting` status dot (faster pulse animation)
+- [x] 16.8: `disconnectWebSocket()` clears pending reconnect timer and resets state
+
+**Files Changed:** `background.ts`, `sidepanel/main.ts`, `sidepanel/style.css`
+
+---
+
+## Task 17: Apply DOM Updates from Client
+
+**Goal:** When the extension sends a `CLIENT_DOM_UPDATE` message mid-task, actually update the agent's page_context instead of just logging it.
+
+**Impact:** Agent always works with fresh DOM, reducing stale-state action failures.
+
+### Files to Change
+
+| File | Change | Risk |
+|---|---|---|
+| `backend/src/agent_core/server/ws_handler.py` | In `CLIENT_DOM_UPDATE` handler (~line 166), parse the DOM snapshot and update the session's current page_context so the next graph node uses fresh data. | Medium — need to thread-safely update state during graph execution |
+
+### Subtasks
+
+- [ ] 17.1: Parse `CLIENT_DOM_UPDATE` into `PageContext` and store on session
+- [ ] 17.2: On next graph interrupt resume, inject updated page_context into state
+- [ ] 17.3: Test: navigate triggers DOM update → agent sees new page elements
+- [ ] 17.4: Test: rapid DOM updates don't cause race conditions
+
+---
+
+## Task 18: User-Specified Output Format
+
+**Goal:** Allow users to specify output format in their goal (e.g., "return as JSON", "format as table", "give me CSV"). The finalize node should respect this.
+
+**Impact:** Users get output in the format they need — structured, actionable, ready to use.
+
+### Files to Change
+
+| File | Change | Risk |
+|---|---|---|
+| `backend/src/agent_core/agent/prompts.py` | Add output format detection in goal analysis (detect "as JSON", "as CSV", "as table", "in bullet points") | Low |
+| `backend/src/agent_core/agent/nodes.py` | In `finalize`, use detected format to structure the done summary | Low |
+| `backend/src/agent_core/schemas/agent.py` | Add `output_format: str` field to Goal schema | Low |
+
+### Subtasks
+
+- [ ] 18.1: Add format detection keywords in goal analysis ("as JSON", "as CSV", "as table", "as bullet points", "as numbered list")
+- [ ] 18.2: Store detected format in `Goal.output_format`
+- [ ] 18.3: In finalize, format the summary according to `Goal.output_format`
+- [ ] 18.4: Test: "find top 5 restaurants as JSON" → JSON output
+- [ ] 18.5: Test: "compare prices as table" → markdown table output
+- [ ] 18.6: Test: no format specified → default plain text (no regression)
+
+---
+
+## Task 19: Content Script Injection Resilience
+
+**Goal:** Handle content script injection failures gracefully — log clearly, retry once, and notify the agent/user if injection fails.
+
+**Impact:** Eliminates cryptic "content script not responding" errors.
+
+### Completed (2026-04-14)
+
+- [x] 19.1: Restructured `ensureContentScript()` — first pings, then injects with verification, then retries once after 1s
+- [x] 19.2: First injection includes post-inject ping verification (not just fire-and-forget)
+- [x] 19.3: On double failure, throws clear error: "Cannot inject content script... try navigating to a regular website"
+- [x] 19.4: Error propagates to `handleActionExecution` catch block which already sends `failed` status to server
+- [x] 19.5: Extension builds clean (85.33 KB)
+
+**Files Changed:** `background.ts` (`ensureContentScript` rewritten)
+
+---
+
+## Task 20: Consistent Tab Load Timeouts
+
+**Goal:** Normalize tab load timeouts across all tab operations and add timeout for post-navigation DOM extraction race.
+
+**Impact:** Heavy pages don't fail on tab switch. DOM extraction doesn't race ahead of page load.
+
+### Completed (2026-04-14)
+
+- [x] 20.1: Changed `waitForTabLoad` default from 10s → 15s
+- [x] 20.2: `switch_tab` — removed explicit 5s, now uses 15s default
+- [x] 20.3: `new_tab` — removed explicit 10s, now uses 15s default
+- [x] 20.4: Post-action DOM re-extraction — removed explicit 10s, now uses 15s default
+- [x] 20.5: Error recovery — removed explicit 5s, now uses 15s default
+- [x] 20.6: `chrome.tabs.onUpdated` handler already waits for `status === 'complete'` before re-injecting — no race
+- [x] 20.7: Extension builds clean (85.32 KB)
+
+**Files Changed:** `background.ts` (5 timeout values normalized)
+
+---
+
+## Task 21: GraphInterrupt Handling Fix
+
+**Goal:** Fix incomplete GraphInterrupt handling in ws_handler that may cause the interrupt loop to exit prematurely.
+
+**Impact:** Prevents silent task failures during user interrupts.
+
+### Completed (2026-04-14)
+
+- [x] 21.1: Identified bug — `GraphInterrupt` caught OUTSIDE the while loop, so after handling interrupt + user response, the loop exited immediately instead of resuming
+- [x] 21.2: Moved `GraphInterrupt` catch INSIDE the while loop as a try/except around `astream`
+- [x] 21.3: After catching GraphInterrupt, execution flows to the interrupt check → `_handle_interrupt` → `Command(resume=...)` → `continue` → loop re-enters
+- [x] 21.4: Backend compiles clean, graph has 16 nodes
+
+**Files Changed:** `ws_handler.py` (restructured the main execution loop)
+
+---
+
+## Task 22: Message Size Validation
+
+**Goal:** Add size limits on incoming WebSocket messages to prevent OOM from oversized DOM payloads.
+
+**Impact:** Server stability — malicious or buggy clients can't crash the server.
+
+### Files to Change
+
+| File | Change | Risk |
+|---|---|---|
+| `backend/src/agent_core/server/ws_handler.py` | Add message size check after `ws.receive_json()`. Reject messages > 5MB with error response. | Low |
+
+### Subtasks
+
+- [ ] 22.1: Add message size validation (reject > 5MB)
+- [ ] 22.2: Send `server_error` with "DOM snapshot too large" message
+- [ ] 22.3: Test: normal DOM (100KB) → accepted
+- [ ] 22.4: Test: oversized payload → rejected with clear error
+
+---
+
+## Task 23: Silent Exception Logging in Finalize
+
+**Goal:** Fix `_format_findings_with_template()` that silently swallows exceptions, causing template formatting failures to be hidden.
+
+**Impact:** Debugging finalize issues becomes possible.
+
+### Completed (2026-04-14)
+
+- [x] 23.1: Added `logger.warning("template_formatting_failed", ...)` before returning None on exception
+- [x] 23.2: Logs template name and error message (truncated to 200 chars)
+- [x] 23.3: Backend compiles clean
+
+**Files Changed:** `nodes.py` (1 line added in `_format_findings_with_template`)
+
+---
+
 ## Implementation Order
 
 ```
 Phase 1 (Completed):
-  [x] Task 1: Action Batching — scroll+read auto-batch, duplicate detection
-  [x] Task 2: Page Context Caching — skip DOM re-extraction for non-mutating actions
-  [x] Task 9: SPA Click Compatibility & Modal Handling
+  [x] Task 1:  Action Batching
+  [x] Task 2:  Page Context Caching
+  [x] Task 9:  SPA Click Compatibility & Modal Handling
   [x] Task 10: Structured Data Extraction (extract_listings)
 
-Phase 2 (Next Sprint):
-  [ ] Task 11: Export Output to File (PDF / CSV / Excel / JSON)
-  [ ] Task 5: Smarter Element Selection
-  [ ] Task 8: Response Templates
+Phase 2 (Completed — 2026-04-14):
+  [x] Task 12: Prompt Engineering Overhaul
+  [x] Task 13: Credential Auto-Fill & Chat Response Bugs
 
-Phase 3 (Future):
+Phase 3 — Reliability (Completed — 2026-04-14):
+  [x] Task 14: Disabled Element Click Detection
+  [x] Task 16: WebSocket Reconnection with Backoff
+  [x] Task 19: Content Script Injection Resilience
+  [x] Task 20: Consistent Tab Load Timeouts
+  [x] Task 21: GraphInterrupt Handling Fix
+  [x] Task 23: Silent Exception Logging in Finalize
+
+Phase 3.5 — Testing & Generalization (Completed — 2026-04-14):
+  [x] Fix done() page text dump — detect UI text in summary, replace with action summary
+  [x] Fix raw JSON reasoning leaking to UI — parse/clean Qwen JSON in ws_handler
+  [x] Generalize multi-step interaction — auto-wait after ANY submit/confirm/send click
+  [x] Submit-click evaluation — don't fast-track submit buttons, verify with LLM
+  [x] Action queue system — _queued_actions for predictable follow-ups (credential→submit)
+  [x] Credential→Submit chain — auto-queue login button click after last credential typed
+  [x] Output token caps — action LLM 512, reasoning LLM 1024 (down from 4096)
+  [x] Credential auto-fill reasoning — guide LLM to click submit after credentials entered
+
+Phase 4 — Capabilities (Completed — 2026-04-14):
+  [x] Task 18: User-Specified Output Format
+  [x] Task 22: Message Size Validation
+  [x] Task 5:  Smarter Element Selection (disabled + container indicators)
+  [x] Task 15: iFrame Content Traversal
+  [x] Task 17: Apply DOM Updates from Client
+  [x] Task 11: Export Output to File (already implemented)
+  [x] Task 8:  Response Templates (navigation_task pattern added)
+
+Phase 5 — Advanced (Future):
   [ ] Task 6: Streaming Response Summary
   [ ] Task 3: Multi-Tab Parallel Research
-  [ ] Task 4: Session Memory
+  [ ] Task 4: Session Memory Across Tasks
   [ ] Task 7: Preload Next Likely Page (depends on Task 3)
 ```
 
@@ -383,6 +644,16 @@ Phase 3 (Future):
 
 **Workaround:** Tasks that go directly to known sites (Daraz, Amazon) work fast because the direct URL lands on the correct page with server-rendered content.
 
+### [!] Race Condition: Messages Outside Interrupt (ws_handler.py:156-173)
+
+**Symptom:** `CLIENT_ACTION_RESULT` or `CLIENT_USER_RESPONSE` arriving outside an interrupt window are silently dropped with "Unexpected message type" error.
+
+**Root Cause:** The main WebSocket loop only handles `CLIENT_GOAL`, `CLIENT_CANCEL`, and `CLIENT_DOM_UPDATE`. Action results and user responses are only processed inside `_handle_interrupt()`. If timing is wrong, messages can be lost.
+
+**Impact:** Rare, but can cause task hangs if a message arrives at the wrong moment.
+
+**Fix:** Task 21 (GraphInterrupt Handling Fix) addresses the core issue.
+
 ### Resolved Issues
 - [x] Extension background.ts implements page context caching (Task 2.3)
 - [x] Simple button confirmation fixed — only element text triggers risk detection, not description
@@ -397,6 +668,11 @@ Phase 3 (Future):
 - [x] Re-planning loops — suppressed after v2, agent adapts reactively (Task 9)
 - [x] Missing image src in DOM extraction — added `src` to attribute list (Task 10)
 - [x] No structured data extraction — new extract_listings tool (Task 10)
+- [x] Credential auto-fill skipping fields — `break` bug fixed, now scans all elements (Task 13)
+- [x] Chat response missed — auto-wait after type→Enter pattern (Task 13)
+- [x] OpenAI key not found — fallback to `OPENAI_API_KEY` env var (Task 13)
+- [x] Stale vault token silent failure — now warns user to re-submit keys (Task 13)
+- [x] Flat rule-list system prompt — replaced with structured decision framework (Task 12)
 
 ## Testing Protocol
 
@@ -411,6 +687,7 @@ After each task implementation:
    - [ ] Google Maps photo analysis with visual_check (not retested)
    - [x] Price comparison on Daraz (direct URL + read_page)
    - [ ] Login form with credential detection (not retested with Playwright)
+   - [ ] SellrClub login + Bud AI multi-step flow (not yet tested)
 5. **Task-specific tests**: Listed under each task's subtasks
 6. **Performance check**: Measure time and action count, compare with baseline
 

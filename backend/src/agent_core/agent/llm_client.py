@@ -12,6 +12,7 @@ Design decisions:
 - Key resolution: session keys (from KeyVault) > .env keys > error
 """
 
+import os
 from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
@@ -71,6 +72,7 @@ def get_llm(
     streaming: bool = True,
     bind_tools: bool = True,
     api_keys: dict | None = None,
+    max_tokens: int | None = None,
 ) -> BaseChatModel:
     """Create an LLM instance configured for the cognitive agent.
 
@@ -92,8 +94,12 @@ def get_llm(
     keys = api_keys or {}
 
     if provider == LLMProvider.OPENAI:
-        # Resolution: session key > .env key > error
-        api_key = keys.get("openai_api_key") or settings.openai_api_key.get_secret_value()
+        # Resolution: session key > AGENT_OPENAI_API_KEY > OPENAI_API_KEY env var > error
+        api_key = (
+            keys.get("openai_api_key")
+            or settings.openai_api_key.get_secret_value()
+            or os.environ.get("OPENAI_API_KEY", "")
+        )
         if not api_key:
             raise ValueError(
                 "No API key configured for OpenAI. "
@@ -107,7 +113,11 @@ def get_llm(
         )
 
     elif provider == LLMProvider.GROQ:
-        api_key = keys.get("groq_api_key") or settings.groq_api_key.get_secret_value()
+        api_key = (
+            keys.get("groq_api_key")
+            or settings.groq_api_key.get_secret_value()
+            or os.environ.get("GROQ_API_KEY", "")
+        )
         if not api_key:
             raise ValueError(
                 "No API key configured for Groq. "
@@ -121,7 +131,11 @@ def get_llm(
         )
 
     elif provider == LLMProvider.OPENROUTER:
-        api_key = keys.get("openrouter_api_key") or settings.openrouter_api_key.get_secret_value()
+        api_key = (
+            keys.get("openrouter_api_key")
+            or settings.openrouter_api_key.get_secret_value()
+            or os.environ.get("OPENROUTER_API_KEY", "")
+        )
         if not api_key:
             raise ValueError(
                 "No API key configured for OpenRouter. "
@@ -144,7 +158,7 @@ def get_llm(
             model=model_name,
             temperature=temperature,
             base_url=base_url,
-            num_predict=4096,
+            num_predict=max_tokens or 4096,
         )
 
     if bind_tools:
@@ -186,6 +200,7 @@ def get_reasoning_llm(model_name: str | None = None, api_keys: dict | None = Non
         temperature=0.4,
         bind_tools=False,
         api_keys=api_keys,
+        max_tokens=1024,  # Reasoning/eval responses should be concise JSON
     )
 
 
@@ -287,4 +302,5 @@ def get_action_llm_dynamic(
         temperature=0.1,
         bind_tools=False,  # We'll bind manually
         api_keys=api_keys,
+        max_tokens=512,  # Action decisions need only tool call + short reasoning
     ).bind_tools(tools)

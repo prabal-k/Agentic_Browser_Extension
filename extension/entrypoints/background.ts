@@ -23,6 +23,13 @@ export default defineBackground(() => {
   let sessionToken: string | null = null;
   let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 
+  // Reconnection state
+  let reconnectAttempts = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let intentionalDisconnect = false;
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_BASE_DELAY_MS = 1000; // 1s, 2s, 4s, 8s, 16s (capped at 30s)
+
   // Track which tab the current task is running on.
   // Once a goal is sent, we lock to that tab so tab-switching doesn't break actions.
   let taskTabId: number | null = null;
@@ -95,6 +102,7 @@ export default defineBackground(() => {
   function connectWebSocket() {
     if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
 
+    intentionalDisconnect = false; // Allow reconnection from this point
     broadcastToSidePanel({ type: 'connection_status', status: 'connecting' });
     const wsUrl = getWsUrl();
     console.log('[Agentic] Connecting to', serverUrl, sessionToken ? '(with token)' : '(no token)');
@@ -109,6 +117,7 @@ export default defineBackground(() => {
 
     ws.onopen = () => {
       console.log('[Agentic] WebSocket connected!');
+      reconnectAttempts = 0; // Reset on successful connection
       broadcastToSidePanel({ type: 'connection_status', status: 'connected' });
       startKeepAlive();
     };
@@ -147,11 +156,39 @@ export default defineBackground(() => {
       sessionId = null;
       taskTabId = null;
       stopKeepAlive();
-      broadcastToSidePanel({ type: 'connection_status', status: 'disconnected' });
+
+      // Auto-reconnect unless deliberately disconnected by user
+      if (!intentionalDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        const delay = Math.min(RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempts - 1), 30000);
+        console.log(`[Agentic] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        broadcastToSidePanel({
+          type: 'connection_status',
+          status: 'reconnecting',
+          message: `Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`,
+        });
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectWebSocket();
+        }, delay);
+      } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.log('[Agentic] Max reconnect attempts reached — giving up');
+        broadcastToSidePanel({
+          type: 'connection_status',
+          status: 'disconnected',
+          message: 'Connection lost. Click Connect to retry.',
+        });
+        reconnectAttempts = 0; // Reset so manual connect works
+      } else {
+        broadcastToSidePanel({ type: 'connection_status', status: 'disconnected' });
+      }
     };
   }
 
   function disconnectWebSocket() {
+    intentionalDisconnect = true;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectAttempts = 0;
     stopKeepAlive();
     ws?.close();
     ws = null;
@@ -196,15 +233,52 @@ export default defineBackground(() => {
   // --- Content Script Helpers ---
 
   async function ensureContentScript(tabId: number): Promise<void> {
+    // Check if content script is already alive
     try {
       await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+      return; // Content script is responsive
     } catch {
+      // Content script not loaded — attempt injection
+    }
+
+    // First injection attempt
+    try {
       console.log('[Agentic] Injecting content script into tab', tabId);
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ['content-scripts/content.js'],
       });
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 500));
+
+      // Verify it loaded
+      try {
+        await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+        return; // Success
+      } catch {
+        // First inject didn't respond — retry once
+      }
+    } catch (err: any) {
+      console.warn('[Agentic] First injection failed:', err?.message || err);
+    }
+
+    // Retry once after 1s (page may still be loading)
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      console.log('[Agentic] Retrying content script injection into tab', tabId);
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content-scripts/content.js'],
+      });
+      await new Promise(r => setTimeout(r, 500));
+    } catch (err: any) {
+      // Both attempts failed — this is a page we can't inject into
+      // (chrome://, edge://, PDF viewer, extension pages, etc.)
+      // This is normal for restricted pages — not a bug.
+      console.warn('[Agentic] Content script cannot load on this tab (restricted page):', err?.message || err);
+      throw new Error(
+        `Cannot inject content script into this page (restricted page). ` +
+        `The agent will navigate to the target website automatically.`
+      );
     }
   }
 
@@ -212,7 +286,7 @@ export default defineBackground(() => {
    * Wait for a tab to finish loading after a navigation action.
    * Returns once the tab's status is 'complete' or timeout.
    */
-  function waitForTabLoad(tabId: number, timeoutMs = 10000): Promise<void> {
+  function waitForTabLoad(tabId: number, timeoutMs = 15000): Promise<void> {
     return new Promise((resolve) => {
       const start = Date.now();
 
@@ -302,7 +376,7 @@ export default defineBackground(() => {
       const newTab = await chrome.tabs.create({ url: action.value || 'about:blank' });
       if (newTab.id) taskTabId = newTab.id;
       // Wait for load
-      await waitForTabLoad(newTab.id!, 10000);
+      await waitForTabLoad(newTab.id!);
       await ensureContentScript(newTab.id!);
       const dom = await extractDomFromTab(newTab.id!);
       return {
@@ -337,7 +411,7 @@ export default defineBackground(() => {
       if (idx >= 0 && idx < tabs.length && tabs[idx].id) {
         taskTabId = tabs[idx].id!;
         await chrome.tabs.update(taskTabId, { active: true });
-        await waitForTabLoad(taskTabId, 5000);
+        await waitForTabLoad(taskTabId);
         await ensureContentScript(taskTabId);
         const dom = await extractDomFromTab(taskTabId);
         return {
@@ -441,7 +515,7 @@ export default defineBackground(() => {
       if (!skipDom) {
         if (isNavAction || pageChanged) {
           console.log('[Agentic] Navigation detected, waiting for page load...');
-          await waitForTabLoad(tabId, 10000);
+          await waitForTabLoad(tabId);
           await ensureContentScript(tabId);
         } else {
           await new Promise(r => setTimeout(r, 800));
@@ -473,7 +547,7 @@ export default defineBackground(() => {
       // Try to recover: wait for page load and re-extract
       let domData: any = null;
       try {
-        await waitForTabLoad(tabId, 5000);
+        await waitForTabLoad(tabId);
         await ensureContentScript(tabId);
         domData = await extractDomFromTab(tabId);
       } catch {

@@ -309,12 +309,35 @@ function addDoneMessage(success: boolean, summary: string, actions: number, rawD
       const btn = document.createElement('button');
       btn.className = 'export-btn';
       btn.textContent = fmt.label;
-      btn.addEventListener('click', () => {
-        const baseUrl = (window as any).__WS_URL__
-          ? (window as any).__WS_URL__.replace('ws://', 'http://').replace('/ws', '')
-          : 'http://localhost:8001';
+      btn.addEventListener('click', async () => {
+        const baseUrl = getBaseUrl();
         const url = `${baseUrl}/api/export/${rawData.export_id}?format=${fmt.key}`;
-        window.open(url, '_blank');
+        try {
+          btn.disabled = true;
+          btn.textContent = '...';
+          const resp = await fetch(url);
+          if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+          }
+          const blob = await resp.blob();
+          const disposition = resp.headers.get('Content-Disposition') || '';
+          const match = disposition.match(/filename="?(.+?)"?$/);
+          const filename = match ? match[1] : `export.${fmt.key}`;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+          btn.textContent = fmt.label;
+        } catch (e: any) {
+          console.error('Export download failed:', e);
+          btn.textContent = 'Failed';
+          setTimeout(() => { btn.textContent = fmt.label; }, 2000);
+        } finally {
+          btn.disabled = false;
+        }
       });
       exportBar.appendChild(btn);
     }
@@ -494,6 +517,10 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (type === 'connection_status') {
     setConnectionStatus(message.status);
+    // Show reconnection or failure messages from the background script
+    if (message.message && (message.status === 'reconnecting' || message.status === 'disconnected')) {
+      statusText.textContent = message.message;
+    }
   }
 
   else if (type === 'server_message' && data) {
@@ -565,6 +592,10 @@ chrome.runtime.onMessage.addListener((message) => {
     else if (msgType === 'server_done') {
       setWorking(false);
       addDoneMessage(data.success, data.summary || 'Task complete', data.total_actions || 0, data);
+    }
+
+    else if (msgType === 'server_warning') {
+      addMessage('system', `⚠️ ${data.message || 'Warning from server'}`);
     }
 
     else if (msgType === 'server_error') {

@@ -168,7 +168,70 @@
 - [x] Extension builds clean (58.88 KB)
 - [x] Tested on Hacker News and Example.com via Playwright MCP
 
-## Phase 11 — Production & Distribution (Planned)
+## Phase 11 — Agent Intelligence & Reliability ✅ COMPLETE (2026-04-14)
+- [x] **Task 12: Prompt Engineering Overhaul**
+  - [x] Rewrote `SYSTEM_ACTION_DECISION` — structured decision framework with pre-action checklist, element selection guide, tool selection table, task patterns
+  - [x] Cleaned `ACTION_DECISION_PROMPT` — pure context delivery, no duplicated rules
+  - [x] Multi-step flow guidance (wait after submit, read before next step)
+  - [x] Login flow guidance (ask_user, split-login detection)
+- [x] **Task 13: Credential Auto-Fill & Chat Response Bugs**
+  - [x] Fixed credential auto-fill `break` bug — scans all DOM elements, added aria-label matching
+  - [x] Chat response auto-wait — type→Enter pattern triggers wait + read guidance
+  - [x] Expanded conversation history (300→600 chars, 6→10 messages)
+  - [x] OpenAI key fallback to bare `OPENAI_API_KEY` env var
+  - [x] Stale vault token warning to user
+- [x] **Task 14: Disabled Element Click Detection**
+  - [x] `isElementDisabled()` + `isElementVisible()` helpers
+  - [x] Click, select_option, check, uncheck return proper error statuses
+- [x] **Task 16: WebSocket Reconnection**
+  - [x] Auto-reconnect with exponential backoff (1s→30s, max 5 attempts)
+  - [x] Intentional disconnect suppresses reconnection
+  - [x] Sidepanel shows "Reconnecting (N/5)..." with pulsing indicator
+- [x] **Task 19: Content Script Injection Resilience**
+  - [x] Retry once after 1s, verify with ping, clear error on double failure
+- [x] **Task 20: Consistent Tab Load Timeouts**
+  - [x] All `waitForTabLoad` calls normalized to 15s default
+- [x] **Task 21: GraphInterrupt Handling Fix**
+  - [x] Moved `GraphInterrupt` catch inside while loop — agent resumes after interrupt
+- [x] **Task 23: Silent Exception Logging in Finalize**
+  - [x] Template formatting errors now logged as warnings
+
+## Phase 12 — Extended Capabilities ✅ COMPLETE (2026-04-14)
+- [x] **Task 18: User-Specified Output Format**
+  - [x] Format detection in analyze_and_plan (json, csv, table, bullets, numbered)
+  - [x] `_apply_output_format()` in finalize — converts findings to requested format
+  - [x] `Goal.output_format` field added to schema
+- [x] **Task 22: Message Size Validation**
+  - [x] 5MB limit on incoming WebSocket messages
+  - [x] Clear error message sent back if exceeded
+- [x] **Task 5: Smarter Element Selection**
+  - [x] `*disabled` shown in LLM representation for disabled elements
+  - [x] `[container:N]` shows child count for non-leaf elements
+  - [x] `is_leaf` and `depth` already existed in schema and content script
+- [x] **Task 15: iFrame Content Traversal**
+  - [x] Same-origin iframes traversed in `collectElements()`
+  - [x] Cross-origin iframes skipped gracefully (try/catch)
+- [x] **Task 17: Apply DOM Updates from Client**
+  - [x] `CLIENT_DOM_UPDATE` parsed into `PageContext` and stored on session
+  - [x] Consumed on next graph resume if no new_dom in action result
+  - [x] `pending_dom_update` field added to Session
+- [x] **Task 11: Export Output to File** (already implemented in previous phase)
+  - [x] Formatters: JSON, CSV, Excel (openpyxl), PDF (fpdf2)
+  - [x] `/api/export/{export_id}?format=` REST endpoint
+  - [x] Auto-detect exportable data on done()
+  - [x] Sidepanel download buttons
+- [x] **Task 8: Response Templates**
+  - [x] Enhanced `_format_findings_with_template()` with per-type formatting
+  - [x] Added `navigation_task` pattern for action/login/form tasks
+  - [x] Output hint guides LLM to write concise summaries, not dump page text
+
+## Phase 13 — Advanced Features (Future)
+- [ ] Task 6: Streaming Response Summary
+- [ ] Task 3: Multi-Tab Parallel Research
+- [ ] Task 4: Session Memory Across Tasks
+- [ ] Task 7: Preload Next Likely Page
+
+## Phase 14 — Production & Distribution (Planned)
 - [ ] Security audit (OWASP, CSP, extension permissions review)
 - [ ] Error handling improvements (graceful degradation, retry with backoff)
 - [ ] Performance optimization (DOM extraction timing, WebSocket message batching)

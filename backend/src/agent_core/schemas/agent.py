@@ -213,6 +213,10 @@ class Goal(BaseModel):
         default="",
         description="Why the agent thinks this goal is/isn't achievable"
     )
+    output_format: str = Field(
+        default="",
+        description="User-requested output format: 'json', 'csv', 'table', 'bullets', 'numbered', or '' for default"
+    )
 
 
 class ReasoningTrace(BaseModel):
@@ -487,6 +491,7 @@ class AgentState(TypedDict, total=False):
     pending_user_input: str  # User-provided value from interrupt (credentials, OTP, etc.)
     pending_input_field_type: str  # What kind of field the input is for (email, password, etc.)
     _stored_credentials: dict  # Parsed credentials from user (email, password) for auto-typing
+    _queued_actions: list  # Auto-chained actions to execute without LLM call
 
     # ---- Configuration ----
     model_name: str  # Which LLM model to use
@@ -561,6 +566,7 @@ def create_initial_state(
         pending_user_input="",
         pending_input_field_type="",
         _stored_credentials={},
+        _queued_actions=[],
 
         # Configuration
         model_name=model_name,

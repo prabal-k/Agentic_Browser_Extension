@@ -104,6 +104,12 @@ class Settings(BaseSettings):
         description="Allowed CORS origins"
     )
 
+    # Memory / persistence
+    memory_dir: str = Field(
+        default="",
+        description="Directory for persistent memory DB. Empty = backend/data/"
+    )
+
     # Logging
     log_level: str = Field(default="INFO")
     log_format: str = Field(

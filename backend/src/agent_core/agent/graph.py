@@ -213,8 +213,13 @@ async def ask_user_node(state: AgentState) -> dict:
     if parsed["password"]:
         stored_credentials["password"] = parsed["password"]
 
+    # If we have both email and password, route directly to decide_action
+    # so the auto-type fast path fires immediately — no LLM call needed.
+    has_credentials = bool(stored_credentials.get("email") or stored_credentials.get("password"))
+    next_status = CognitiveStatus.DECIDING if has_credentials else CognitiveStatus.REASONING
+
     return {
-        "cognitive_status": CognitiveStatus.REASONING,
+        "cognitive_status": next_status,
         "current_reasoning": "\n".join(reasoning_parts),
         "pending_user_input": pending_value,
         "_stored_credentials": stored_credentials,
@@ -503,8 +508,14 @@ def create_agent_graph(checkpointer=None) -> StateGraph:
     # Retry → straight to action decision (retry strategy is in current_reasoning)
     builder.add_edge("handle_retry", "decide_action")
 
-    # Ask user → back to reasoning (need to process user response)
-    builder.add_edge("ask_user_node", "reason")
+    # Ask user → decide_action if credentials parsed, else reason for LLM processing
+    def route_after_ask_user(state: AgentState) -> Literal["decide_action", "reason"]:
+        status = state.get("cognitive_status", CognitiveStatus.REASONING)
+        if status == CognitiveStatus.DECIDING:
+            return "decide_action"
+        return "reason"
+
+    builder.add_conditional_edges("ask_user_node", route_after_ask_user)
 
     # Finalize → END
     builder.add_edge("finalize", END)

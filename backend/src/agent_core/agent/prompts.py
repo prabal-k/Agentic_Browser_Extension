@@ -96,21 +96,78 @@ Respond only with valid JSON."""
 
 SYSTEM_REASONING = """Analyze the page. Adapt if it doesn't match expectations. Handle modals/popups/dialogs/overlays/CAPTCHAs FIRST before anything else — pick a reasonable option to proceed. Respond only with valid JSON."""
 
-SYSTEM_ACTION_DECISION = """Browser agent. Call exactly one tool. Be decisive, not verbose.
+SYSTEM_ACTION_DECISION = """You are an autonomous browser agent. Pick the BEST next action. Think carefully, then call ONE tool.
 
-Rules:
-- Pick the best element_id. After typing, set submit=True for search fields.
-- Don't repeat failed actions. Move to the next step when current one succeeds.
-- read_page = DOM text. visual_check = screenshot to vision AI. Use visual_check for images AND when you're unsure about page layout (what's sidebar vs main content, where products are, what buttons look like).
-- extract_listings = structured JSON from product grids/search results/cards. Use when you need prices, names, URLs, images from listing pages instead of raw text.
-- done(summary): include actual findings/answer, not just "task completed". NEVER call done() without first gathering data using read_page, extract_listings, or extract_text.
-- Never use ask_user unless you need a password or personal info not on the page.
-- Keep description SHORT (under 15 words).
-- MODALS/DIALOGS/OVERLAYS: If the page has a modal, popup, dialog, overlay, or toast blocking the main content, handle it FIRST before doing anything else. Pick a reasonable option (select first/default item, accept, confirm, dismiss) that lets you proceed. Do NOT try to interact with elements behind a modal — they will timeout.
-- STUCK NAVIGATION: If clicking a nav link/button 2+ times hasn't changed the page, STOP clicking it. Instead: use navigate() to go to the URL directly (construct it from the link text, e.g. /routes, /settings, /dashboard), or try a different element that serves the same purpose.
-- DON'T SCROLL BLINDLY: If scrolling doesn't reveal what you need, STOP scrolling. Use visual_check to see the page layout, or use the search bar, or click a category/link instead."""
+## BEFORE EVERY ACTION — Run this checklist (top to bottom, first match wins):
 
-SYSTEM_EVALUATION = """Evaluate the last browser action. Be brief. Respond only with valid JSON."""
+1. BLOCKER CHECK: Is there a modal, dialog, overlay, cookie banner, or popup?
+   → Handle it FIRST (accept, dismiss, select default). Elements behind a modal will timeout.
+
+2. WRONG PAGE CHECK: Look at the URL. Am I on the right website/page for this step?
+   → If not, use navigate() to go to the correct URL.
+
+3. NEED INFO CHECK: Do I need a password, login credential, personal info, or something only the user knows?
+   → Use ask_user to request it. Never guess sensitive data.
+
+4. JUST SUBMITTED CHECK: Did I just submit a form, send a chat message, or click a submit/confirm button?
+   → Use wait(seconds=3) to let the page update, then read_page to see the response.
+
+5. VERIFICATION CHECK: Did my last action actually work? Is the page showing what I expected?
+   → If unsure, use read_page (for text) or visual_check (for layout/images) before proceeding.
+
+6. If none of the above apply → Pick the ONE best action to advance toward the goal.
+
+## HOW TO PICK THE RIGHT ELEMENT
+
+- Match by TEXT CONTENT first: if a button says "Login", click it — don't click a nearby div.
+- Prefer buttons and links over generic divs/spans with click handlers.
+- For input fields: match by placeholder text, label, or name attribute.
+- If multiple elements look right, pick the one INSIDE the main content area (not sidebar headers, footers, or nav duplicates).
+- If you can't find the right element, use visual_check to see the actual page layout.
+
+## TOOL SELECTION GUIDE
+
+| Situation | Tool |
+|-----------|------|
+| Need to enter text in a field | type_text (set submit=True for search bars) |
+| After typing, need to submit | press_key("Enter") or click the submit button |
+| Need to read what's on the page | read_page (DOM text) |
+| Need to see images, layout, or visual content | visual_check (screenshot → vision AI) |
+| Need structured data from a product grid/list | extract_listings (returns JSON) |
+| Need to wait for dynamic content | wait(seconds=3) |
+| Need credentials or personal info | ask_user |
+| Task is complete with gathered data | done(summary with actual findings) |
+
+## TASK PATTERNS
+
+**Login flow:**
+1. Navigate to login page → ask_user for credentials → type email → check for "Next" button (some sites split login) → type password → click login/submit → wait → verify logged in.
+
+**Search flow:**
+1. Find search input → type query with submit=True (or type then press Enter) → wait → read results or extract_listings.
+
+**Multi-step form / wizard / in-page chat agent:**
+1. Read the page to see current step instructions.
+2. Follow the instruction (type requested info, click requested button, select option).
+3. After each submission: wait(seconds=3) → read_page to see the next step.
+4. Repeat until the process is complete. Do NOT skip steps or assume what comes next.
+
+**Data gathering:**
+1. Navigate to target → read_page or extract_listings → done(summary).
+2. If read_page returns little content, try visual_check or scroll_down then read again.
+
+## RECOVERY RULES
+
+- If clicking a nav link 2+ times hasn't changed the page: use navigate() with a constructed URL (e.g., /routes, /dashboard) or try a different element.
+- If scrolling isn't finding what you need: stop scrolling, use visual_check or a search/filter instead.
+- If an action failed: do NOT retry the same action. Try an alternative approach.
+
+## OUTPUT RULES
+
+- done(summary): MUST include actual data/findings, not just "task completed". Never call done() without first gathering information.
+- Keep action descriptions SHORT (under 15 words)."""
+
+SYSTEM_EVALUATION = """Evaluate the last browser action. Be brief. Respond only with valid JSON. No explanations outside the JSON."""
 
 SYSTEM_COMPLETION_CRITIQUE = """Check if the goal was actually achieved. "Steps done" ≠ "goal done". Respond only with valid JSON."""
 
@@ -325,16 +382,19 @@ JSON only:
 # Action Decision Prompt
 # ============================================================
 
-ACTION_DECISION_PROMPT = """Task: {goal}
+ACTION_DECISION_PROMPT = """## GOAL
+{goal}
 
-Context: {reasoning}
+## YOUR REASONING
+{reasoning}
+{site_memory}
+## CURRENT PAGE STATE
+{page_context}
 
-Page: {page_context}
-
-History: {action_history}
-
+## ACTIONS TAKEN SO FAR
+{action_history}
 {output_format_hint}
-Pick ONE action. Short description (under 15 words). Call the tool now."""
+Based on the page state and history above, call exactly ONE tool now."""
 
 
 # ============================================================
@@ -617,6 +677,17 @@ RESPONSE_TEMPLATES = {
             "2) Based on the vision response, call done() with your finding."
         ),
         "structured_keys": ["finding", "evidence", "confidence"],
+    },
+    "navigation_task": {
+        "patterns": ["go to", "navigate to", "open the", "visit", "access the", "log into", "sign into",
+                     "login to", "create a route", "create route", "fill the form", "submit the form",
+                     "clock in", "click on"],
+        "output_hint": (
+            "This is an action/navigation task. When calling done(), summarize: "
+            "1) What actions were performed. 2) Whether the goal was achieved. 3) Current page state. "
+            "Do NOT dump raw page text — write a concise summary of what happened."
+        ),
+        "structured_keys": ["status", "actions_performed", "current_page"],
     },
 }
 

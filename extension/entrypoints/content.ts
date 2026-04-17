@@ -216,6 +216,20 @@ function collectElements(root: Document | ShadowRoot | Element, selectors: strin
     });
   }
 
+  // Traverse same-origin iframes
+  if (root instanceof Document) {
+    root.querySelectorAll('iframe').forEach(iframe => {
+      try {
+        const iframeDoc = (iframe as HTMLIFrameElement).contentDocument;
+        if (iframeDoc) {
+          elements.push(...collectElements(iframeDoc, selectors));
+        }
+      } catch {
+        // Cross-origin iframe — cannot access, skip silently
+      }
+    });
+  }
+
   return elements;
 }
 
@@ -557,19 +571,56 @@ async function typeIntoElement(
     await new Promise(r => setTimeout(r, 50));
   }
 
-  // --- Strategy 1: execCommand('insertText') ---
-  // Best approach — triggers native input events that frameworks listen to
-  targetEl.focus();
-  let typed = false;
-  try {
-    typed = document.execCommand('insertText', false, text);
-  } catch { /* some browsers throw instead of returning false */ }
-  await new Promise(r => setTimeout(r, 80));
+  // --- Strategy 1a: nativeSetter for <input>/<textarea> (React/Vue/Angular) ---
+  // For form inputs, ALWAYS use nativeSetter first — this is the ONLY reliable
+  // way to update React controlled components. execCommand doesn't work on inputs.
+  if (isInput) {
+    targetEl.focus();
+    const nativeInputSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype, 'value'
+    )?.set;
+    const nativeTextareaSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype, 'value'
+    )?.set;
+    const setter = el.tagName === 'TEXTAREA' ? nativeTextareaSetter : nativeInputSetter;
 
-  // Check if it actually worked
-  const textAfterExec = getElementText(targetEl, isInput);
-  if (typed && textAfterExec.includes(text.substring(0, Math.min(10, text.length)))) {
-    return { success: true, error: '' };
+    const newValue = clearFirst ? text : (el as HTMLInputElement).value + text;
+    if (setter) {
+      setter.call(el, newValue);
+    } else {
+      (el as HTMLInputElement).value = newValue;
+    }
+
+    // Dispatch events that React/Vue/Angular listen to
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    // Also dispatch React 16+ compatible InputEvent
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+
+    await new Promise(r => setTimeout(r, 100));
+
+    // Verify
+    const valueAfterSet = (el as HTMLInputElement).value;
+    if (valueAfterSet.includes(text.substring(0, Math.min(10, text.length)))) {
+      return { success: true, error: '' };
+    }
+    // If nativeSetter didn't work, fall through to execCommand
+  }
+
+  // --- Strategy 1b: execCommand('insertText') for contenteditable ---
+  // Only used for contenteditable elements, NOT for <input>/<textarea>
+  if (!isInput) {
+    targetEl.focus();
+    let typed = false;
+    try {
+      typed = document.execCommand('insertText', false, text);
+    } catch { /* some browsers throw instead of returning false */ }
+    await new Promise(r => setTimeout(r, 80));
+
+    const textAfterExec = getElementText(targetEl, false);
+    if (typed && textAfterExec.includes(text.substring(0, Math.min(10, text.length)))) {
+      return { success: true, error: '' };
+    }
   }
 
   // --- Strategy 2: Clipboard paste (for contenteditable SPAs) ---
@@ -924,6 +975,25 @@ async function executeAction(action: ActionRequest): Promise<ActionResult> {
   }
 }
 
+/** Check if an element is disabled (native disabled attr, aria-disabled, or pointer-events:none). */
+function isElementDisabled(el: Element): boolean {
+  if ((el as HTMLButtonElement).disabled === true) return true;
+  if (el.getAttribute('aria-disabled') === 'true') return true;
+  // Also check parent fieldset disabled (affects all children)
+  const fieldset = el.closest('fieldset');
+  if (fieldset && (fieldset as HTMLFieldSetElement).disabled) return true;
+  return false;
+}
+
+/** Check if an element is visible (has dimensions and not hidden). */
+function isElementVisible(el: Element): boolean {
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+  return true;
+}
+
 async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
   const { action_type, element_id, value } = action;
 
@@ -937,9 +1007,17 @@ async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
   }
 
   switch (action_type) {
-    case 'click':
-      (el as HTMLElement)?.click();
+    case 'click': {
+      if (!el) return { status: 'element_not_found', message: `Element ${element_id} not found`, page_changed: false, execution_time_ms: 0 };
+      if (isElementDisabled(el)) {
+        return { status: 'element_disabled', message: `Element ${element_id} is disabled — cannot click it. Try a different element or wait for the page to update.`, page_changed: false, execution_time_ms: 0 };
+      }
+      if (!isElementVisible(el)) {
+        return { status: 'element_not_visible', message: `Element ${element_id} is hidden (display:none, visibility:hidden, or zero size). Scroll or wait for it to appear.`, page_changed: false, execution_time_ms: 0 };
+      }
+      (el as HTMLElement).click();
       return { status: 'success', message: `Clicked element ${element_id}`, page_changed: false, execution_time_ms: 0 };
+    }
 
     case 'type_text':
     case 'fill': {
@@ -1002,26 +1080,35 @@ async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
       return { status: 'success', message: `Cleared and typed '${actualTextClear}'${shouldSubmitClear ? ' and submitted' : ''}`, page_changed: shouldSubmitClear || false, execution_time_ms: 0 };
     }
 
-    case 'select_option':
-      if (el && el.tagName === 'SELECT') {
+    case 'select_option': {
+      if (!el) return { status: 'element_not_found', message: 'No element to select option', page_changed: false, execution_time_ms: 0 };
+      if (isElementDisabled(el)) return { status: 'element_disabled', message: `Select element ${element_id} is disabled`, page_changed: false, execution_time_ms: 0 };
+      if (el.tagName === 'SELECT') {
         (el as HTMLSelectElement).value = value || '';
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
       return { status: 'success', message: `Selected option '${value}'`, page_changed: false, execution_time_ms: 0 };
+    }
 
-    case 'check':
-      if (el && 'checked' in el) {
+    case 'check': {
+      if (!el) return { status: 'element_not_found', message: 'No checkbox element found', page_changed: false, execution_time_ms: 0 };
+      if (isElementDisabled(el)) return { status: 'element_disabled', message: `Checkbox ${element_id} is disabled`, page_changed: false, execution_time_ms: 0 };
+      if ('checked' in el) {
         (el as HTMLInputElement).checked = true;
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
       return { status: 'success', message: `Checked element ${element_id}`, page_changed: false, execution_time_ms: 0 };
+    }
 
-    case 'uncheck':
-      if (el && 'checked' in el) {
+    case 'uncheck': {
+      if (!el) return { status: 'element_not_found', message: 'No checkbox element found', page_changed: false, execution_time_ms: 0 };
+      if (isElementDisabled(el)) return { status: 'element_disabled', message: `Checkbox ${element_id} is disabled`, page_changed: false, execution_time_ms: 0 };
+      if ('checked' in el) {
         (el as HTMLInputElement).checked = false;
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
       return { status: 'success', message: `Unchecked element ${element_id}`, page_changed: false, execution_time_ms: 0 };
+    }
 
     case 'hover':
       (el as HTMLElement)?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
