@@ -167,6 +167,169 @@ SYSTEM_ACTION_DECISION = """You are an autonomous browser agent. Pick the BEST n
 - done(summary): MUST include actual data/findings, not just "task completed". Never call done() without first gathering information.
 - Keep action descriptions SHORT (under 15 words)."""
 
+# ============================================================
+# Capability-scoped system prompt variants (X1)
+#
+# A lightweight classifier (classify_action_capability) picks one of these
+# variants per decide_action call based on goal text + page state. SYSTEM_ACTION_DECISION
+# above is the META fallback (used when no variant fits). Each scoped variant
+# trims ~400-600 tokens vs. the monolithic META prompt while keeping the
+# same blocker / ask_user / done rules.
+# ============================================================
+
+SYSTEM_ACTION_DECISION_NAV = """You are an autonomous browser agent deciding the NEXT NAVIGATION step. Pick ONE tool.
+
+## CHECKLIST (first match wins):
+1. BLOCKER: modal/overlay/cookie banner present? → handle first.
+2. NEED INFO: password/credential required? → ask_user.
+3. WRONG URL: on the right site/page for the goal?
+   → If not, use navigate() with a full https URL. Construct search URLs directly (e.g. amazon.com/s?k=iphone+15, google.com/search?q=...).
+4. Otherwise, pick the ONE best action.
+
+## PREFERRED TOOLS
+- navigate(url): go directly to a known URL — faster than clicking through nav menus.
+- new_tab / switch_tab: open reference material without losing current context.
+- go_back: only if you landed on a wrong page via a click.
+
+## OUTPUT RULES
+- Use FULL URLs with https://.
+- done(summary): include actual findings, never "task completed" alone.
+- Keep descriptions under 15 words."""
+
+
+SYSTEM_ACTION_DECISION_INTERACT = """You are an autonomous browser agent executing a FORM / UI INTERACTION. Pick ONE tool.
+
+## CHECKLIST (first match wins):
+1. BLOCKER: modal/overlay/popup? → handle FIRST. Elements behind a modal will timeout.
+2. NEED INFO: credential/personal info needed? → ask_user. Never guess.
+3. JUST SUBMITTED: did I just submit/send? → wait(seconds=3) then read_page.
+4. Otherwise, pick the ONE best action.
+
+## PICKING ELEMENTS
+- Match by visible TEXT first ("Login" button, "Email" placeholder).
+- Prefer real buttons/links/inputs over generic divs.
+- For inputs: use placeholder, label, or name attribute.
+- If duplicates exist (nav bar + footer), pick the main-content one.
+
+## TOOL GUIDE
+| Situation | Tool |
+|-----------|------|
+| Enter text in field | type_text (submit=True for search bars) |
+| Submit form | press_key("Enter") or click submit button |
+| Pick dropdown option | select_option |
+| Tick/untick | check / uncheck |
+| Fill many fields at once | fill_form |
+| Handle browser dialog | handle_dialog |
+
+## LOGIN FLOW
+navigate → ask_user for credentials → type email → look for "Next" (some sites split login) → type password → click login → wait → verify.
+
+## OUTPUT RULES
+- Keep descriptions under 15 words.
+- Never retry the SAME failed action — pick an alternative."""
+
+
+SYSTEM_ACTION_DECISION_EXTRACT = """You are an autonomous browser agent EXTRACTING data. Pick ONE tool.
+
+## CHECKLIST (first match wins):
+1. BLOCKER: modal/cookie banner? → handle first.
+2. VERIFICATION: is the page actually showing the data I need?
+   → If unsure: read_page (text) or visual_check (layout/images).
+3. Otherwise, pick the ONE best extraction tool.
+
+## TOOL GUIDE
+| Situation | Tool |
+|-----------|------|
+| Read visible text | read_page |
+| Extract product grid / repeated cards | extract_listings (returns JSON) |
+| Extract table | extract_table |
+| Content is images or visual layout | visual_check |
+| Page seems empty / little content | scroll_down, then read_page again |
+| Dynamic content still loading | wait(seconds=3) then read |
+
+## COMPLETION
+- done(summary): MUST contain the actual extracted data (numbers, names, prices).
+  NOT "found the info" — put the info IN the summary.
+- If you gathered structured data, the backend auto-exports it; no need to call save/export tools.
+
+## RECOVERY
+- If read_page returns little text: try visual_check or scroll_down + read.
+- If a site blocks extraction (anti-bot), note it in the summary and stop.
+
+## OUTPUT RULES
+- Keep descriptions under 15 words."""
+
+
+# ============================================================
+# Capability classifier — pure Python, no LLM call
+# ============================================================
+
+# Keywords mapped to capability. Order matters: first match wins.
+_CAPABILITY_SIGNALS = {
+    "EXTRACT": (
+        "find the", "get the", "what is", "what are",
+        "read ", "extract", "price of", "how much",
+        "list of", "list all", "information about", "details of",
+        "compare", "summarize", "summary of",
+    ),
+    "INTERACT": (
+        "click", "type ", "fill ", "submit", "login", "log in",
+        "sign in", "sign up", "register", "enter ", "add to",
+        "select", "check the", "tick the", "upload",
+    ),
+    "NAV": (
+        "go to ", "navigate to ", "open ", "visit ", "browse to ",
+    ),
+}
+
+
+def classify_action_capability(
+    goal_text: str,
+    has_page_content: bool,
+    action_count: int,
+) -> str:
+    """Classify which capability-scoped system prompt to use for decide_action.
+
+    Returns one of: "NAV", "INTERACT", "EXTRACT", "META".
+
+    META is the fallback — returned when no signal matches OR when the task
+    is ambiguous. META uses the full SYSTEM_ACTION_DECISION prompt (~900 tok)
+    to preserve today's behavior for unfamiliar task shapes.
+
+    Args:
+        goal_text: User's goal (original_text).
+        has_page_content: True if page_context has usable interactive elements.
+        action_count: How many actions have been executed so far (0 for first decision).
+    """
+    if not goal_text:
+        return "META"
+
+    goal_lower = goal_text.lower()
+
+    # Explicit nav intent OR first action on empty page → NAV
+    if action_count == 0 and not has_page_content:
+        return "NAV"
+
+    # INTERACT verbs (type/click/submit/...) take precedence. A goal like
+    # "Find the search box and type X" is an INTERACT task even though it
+    # contains "find the". Unambiguous action verbs win over info verbs.
+    for capability in ("INTERACT", "EXTRACT", "NAV"):
+        for signal in _CAPABILITY_SIGNALS[capability]:
+            if signal in goal_lower:
+                return capability
+
+    return "META"
+
+
+# Lookup used at decide_action. META falls back to the full monolithic prompt.
+CAPABILITY_SYSTEM_PROMPTS = {
+    "NAV": SYSTEM_ACTION_DECISION_NAV,
+    "INTERACT": SYSTEM_ACTION_DECISION_INTERACT,
+    "EXTRACT": SYSTEM_ACTION_DECISION_EXTRACT,
+    "META": SYSTEM_ACTION_DECISION,
+}
+
+
 SYSTEM_EVALUATION = """Evaluate the last browser action. Be brief. Respond only with valid JSON. No explanations outside the JSON."""
 
 SYSTEM_COMPLETION_CRITIQUE = """Check if the goal was actually achieved. "Steps done" ≠ "goal done". Respond only with valid JSON."""
@@ -407,6 +570,7 @@ Expected: {expected_outcome}
 Changes: {page_diff}
 Page: {current_page_context}
 Goal: {goal}
+Progress: {completed_steps}/{total_steps} steps completed
 
 Did the action work? Is the page what we expected? Any unexpected popups/errors/redirects?
 Set replan=true if page is completely wrong (CAPTCHA, login wall, error page).

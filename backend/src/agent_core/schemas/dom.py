@@ -281,12 +281,16 @@ class PageContext(BaseModel):
             if el.element_type in interactive_types and el.is_enabled
         ]
 
-    def to_llm_representation(self, compact: bool = False) -> str:
+    def to_llm_representation(self, compact: bool = False, max_elements: int | None = None) -> str:
         """Convert entire page context to LLM-friendly text.
 
         Args:
             compact: If True, use minimal representation (for evaluate node).
                      If False, full representation (for decide_action node).
+            max_elements: Optional cap on interactive elements rendered. When
+                     set and the page has more, output truncates and appends
+                     a "(showing top N of M)" note so the LLM knows there is
+                     more to scroll / search for.
         """
         lines = [
             f"URL: {self.url}",
@@ -305,11 +309,27 @@ class PageContext(BaseModel):
             lines.append(f"Text: {summary}")
 
         interactive = self.interactive_elements
-        lines.append(f"\nElements ({len(interactive)}):")
+        total_interactive = len(interactive)
+
+        # Apply element cap. In compact mode, default cap is 30 for backwards
+        # compat. In full mode, honor caller-provided max_elements (decision
+        # nodes pass 40); None means no cap (extraction callers).
+        if compact:
+            cap = max_elements if max_elements is not None else 30
+        else:
+            cap = max_elements
+
+        shown = interactive if cap is None else interactive[:cap]
+        truncated = cap is not None and total_interactive > cap
+
+        header = f"\nElements ({total_interactive}"
+        if truncated:
+            header += f", showing top {cap}"
+        header += "):"
+        lines.append(header)
 
         if compact:
-            # Compact mode: just list element IDs with type and short text
-            for el in interactive[:30]:
+            for el in shown:
                 abbrev = _TYPE_ABBREV.get(el.element_type.value, el.element_type.value)
                 text = el.text[:25] + ".." if el.text and len(el.text) > 25 else (el.text or "")
                 line = f"  [{el.element_id}] {abbrev}"
@@ -317,9 +337,11 @@ class PageContext(BaseModel):
                     line += f' "{text}"'
                 lines.append(line)
         else:
-            # Full mode: detailed element representations
-            for element in interactive:
+            for element in shown:
                 lines.append(f"  {element.to_llm_representation()}")
+
+        if truncated:
+            lines.append(f"  ... ({total_interactive - cap} more elements not shown — scroll or refine target)")
 
         if not interactive:
             lines.append("  (no interactive elements)")

@@ -17,6 +17,36 @@ Design decisions:
 from langchain_core.tools import tool
 
 from agent_core.schemas.actions import Action, ActionType
+from agent_core.config import settings
+
+
+# ============================================================
+# Input validators (X4 — gate obviously-broken tool args before they
+# reach Playwright / the extension)
+# ============================================================
+
+def _normalize_url(url: str) -> str:
+    """Normalize a URL for the navigate tool.
+
+    - Strips surrounding whitespace.
+    - Prepends https:// when scheme missing (agent frequently emits
+      "amazon.com/s?k=..." without a scheme).
+    - Leaves about:, chrome:, data:, file: and existing http/https alone.
+
+    Returns the normalized URL. Invalid-looking values pass through
+    unchanged so downstream error paths still fire with the real reason.
+    """
+    if not url:
+        return url
+    u = url.strip()
+    if not u:
+        return u
+    lower = u.lower()
+    valid_schemes = ("http://", "https://", "about:", "chrome:", "data:", "file:", "javascript:")
+    if any(lower.startswith(s) for s in valid_schemes):
+        return u
+    # Treat as bare domain / path — default to https
+    return "https://" + u
 
 
 # ============================================================
@@ -166,9 +196,10 @@ def navigate(url: str, description: str = "") -> Action:
         url: The full URL to navigate to (e.g., https://youtube.com)
         description: Why you are navigating to this URL
     """
+    normalized = _normalize_url(url)
     return Action(
         action_type=ActionType.NAVIGATE,
-        value=url,
+        value=normalized,
         description=description,
         risk_level="low",
     )
@@ -341,7 +372,7 @@ def new_tab(url: str = "", description: str = "") -> Action:
     """
     return Action(
         action_type=ActionType.NEW_TAB,
-        value=url,
+        value=_normalize_url(url) if url else "",
         description=description,
         risk_level="low",
     )
@@ -467,48 +498,6 @@ def take_screenshot(description: str = "") -> Action:
     """
     return Action(
         action_type=ActionType.TAKE_SCREENSHOT,
-        description=description,
-        risk_level="low",
-        is_reversible=True,
-        requires_confirmation=False,
-    )
-
-
-# ============================================================
-# Monitoring (read-only)
-# ============================================================
-
-@tool
-def get_console_logs(description: str = "") -> Action:
-    """Get recent browser console messages (log, warn, error).
-
-    USE WHEN: A page action seems to silently fail, you want to check
-    for JavaScript errors, or you need to debug page behavior.
-
-    Args:
-        description: What you're looking for in the console
-    """
-    return Action(
-        action_type=ActionType.GET_CONSOLE_LOGS,
-        description=description,
-        risk_level="low",
-        is_reversible=True,
-        requires_confirmation=False,
-    )
-
-
-@tool
-def get_network_log(description: str = "") -> Action:
-    """Get recent network requests (XHR/fetch calls made by the page).
-
-    USE WHEN: You want to check if an action triggered an API call,
-    see if a form submission succeeded, or detect loading states.
-
-    Args:
-        description: What network activity you're looking for
-    """
-    return Action(
-        action_type=ActionType.GET_NETWORK_LOG,
         description=description,
         risk_level="low",
         is_reversible=True,
@@ -842,11 +831,6 @@ BROWSER_TOOLS = [
     read_page,
     visual_check,
     take_screenshot,
-    # Monitoring (stubs — not in default groups)
-    get_console_logs,
-    get_network_log,
-    # JavaScript
-    evaluate_js,
     # Dialogs
     handle_dialog,
     # File & drag
@@ -861,6 +845,13 @@ BROWSER_TOOLS = [
     done,
 ]
 
+# Bug #7 (security): evaluate_js runs arbitrary JS in the active page. Gated
+# behind AGENT_ENABLE_EVALUATE_JS (default False). Only enable in trusted
+# development; never ship in a public/store build — a leaked session token
+# would let an attacker execute arbitrary JS in the user's tab.
+if settings.enable_evaluate_js:
+    BROWSER_TOOLS.append(evaluate_js)
+
 
 # Tool groups for dynamic selection — core is always included
 # Design: core has everything needed for 80% of tasks (11 tools)
@@ -870,7 +861,7 @@ TOOL_GROUPS = {
     "search": [select_option, scroll_up, scroll_to_element, key_combo],
     "tabs": [new_tab, close_tab, switch_tab],
     "forms": [check, uncheck, hover, upload_file],
-    "data": [extract_table, extract_listings, evaluate_js],
+    "data": [extract_table, extract_listings] + ([evaluate_js] if settings.enable_evaluate_js else []),
     "advanced": [drag, handle_dialog, go_forward, refresh],
     "waiting": [wait_for_selector, wait_for_navigation],
     # monitoring removed from groups — stubs that return empty data

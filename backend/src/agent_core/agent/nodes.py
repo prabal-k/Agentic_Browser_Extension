@@ -64,6 +64,8 @@ from agent_core.agent.prompts import (
     SYSTEM_COMPLETION_CRITIQUE,
     SYSTEM_RETRY,
     SYSTEM_GOAL_VERIFICATION,
+    CAPABILITY_SYSTEM_PROMPTS,
+    classify_action_capability,
     format_action_history,
     format_plan_for_prompt,
     format_retry_context,
@@ -1021,7 +1023,7 @@ async def decide_action(state: AgentState) -> dict:
 
     page_context_str = ""
     if state.get("page_context"):
-        page_context_str = state["page_context"].to_llm_representation()
+        page_context_str = state["page_context"].to_llm_representation(max_elements=40)
 
     latest_reasoning = state.get("current_reasoning", "")
 
@@ -1074,8 +1076,28 @@ async def decide_action(state: AgentState) -> dict:
     if conversation_context:
         prompt = conversation_context + "\n" + prompt
 
+    # X1: pick capability-scoped system prompt. Falls back to META (full prompt)
+    # when classifier returns "META", preserving today's behavior for ambiguous tasks.
+    # A page counts as "content" if it has any interactive elements at all OR
+    # a non-blank URL on an http/https scheme. The old ">3 elements" heuristic
+    # mis-classified small pages (e.g., a simple search form with 3 elements)
+    # as empty → NAV, which steered the LLM away from the right tool.
+    pc = state.get("page_context")
+    url = (getattr(pc, "url", "") or "").lower() if pc else ""
+    is_real_url = url.startswith(("http://", "https://")) and "about:blank" not in url
+    has_elements = bool(pc and len(getattr(pc, "elements", [])) >= 1)
+    page_has_content = bool(pc) and (has_elements or is_real_url)
+
+    capability = classify_action_capability(
+        goal_text=original_task,
+        has_page_content=page_has_content,
+        action_count=len(action_history),
+    )
+    system_prompt = CAPABILITY_SYSTEM_PROMPTS.get(capability, SYSTEM_ACTION_DECISION)
+    logger.info("decide_action_capability", capability=capability, action_count=len(action_history))
+
     response = await llm.ainvoke([
-        SystemMessage(content=SYSTEM_ACTION_DECISION),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=prompt),
     ])
 
@@ -1122,9 +1144,6 @@ async def decide_action(state: AgentState) -> dict:
             "extract_table": ActionType.EXTRACT_TABLE,
             "extract_listings": ActionType.EXTRACT_TEXT,
             "take_screenshot": ActionType.TAKE_SCREENSHOT,
-            # Monitoring
-            "get_console_logs": ActionType.GET_CONSOLE_LOGS,
-            "get_network_log": ActionType.GET_NETWORK_LOG,
             # JavaScript
             "evaluate_js": ActionType.EVALUATE_JS,
             # Dialogs
@@ -1460,13 +1479,19 @@ async def observe(state: AgentState) -> dict:
         if result.extracted_data:
             new_memory.important_data[f"extracted_{len(new_memory.important_data)}"] = result.extracted_data
 
-    # Record action in history
+    # Record action in history. Cap at ACTION_HISTORY_MAX to prevent
+    # unbounded growth over long tasks — prompts already truncate at render
+    # time (max_entries=5), but the underlying list would otherwise bloat
+    # the checkpointer state row every iteration.
+    ACTION_HISTORY_MAX = 50
     action_history = list(state.get("action_history", []))
     if action and result:
         action_history.append({
             "action": _safe_serialize(action),
             "result": _safe_serialize(result),
         })
+    if len(action_history) > ACTION_HISTORY_MAX:
+        action_history = action_history[-ACTION_HISTORY_MAX:]
 
     # Record action outcome in persistent memory
     try:
@@ -1704,11 +1729,23 @@ async def evaluate(state: AgentState) -> dict:
             should_re_plan=eval_data.get("should_re_plan", False),
             re_plan_reason=eval_data.get("re_plan_reason") or "",
         )
-    except (json.JSONDecodeError, KeyError):
-        # Default to continuing
+    except (json.JSONDecodeError, KeyError) as e:
+        # Surface parse failures instead of silently defaulting — the fallback
+        # used to look identical to a normal "failed action, keep going" result
+        # which masked upstream LLM output bugs (bad JSON, wrong schema, empty
+        # response). Log + include a visible breadcrumb in goal_progress so it
+        # reaches the client via server_evaluation.
+        raw_preview = (response.content or "")[:200].replace("\n", " ")
+        logger.warning(
+            "evaluate_json_parse_failed",
+            error=str(e),
+            raw_preview=raw_preview,
+        )
         evaluation = Evaluation(
             action_succeeded=result.status == ActionStatus.SUCCESS if result else False,
             should_continue=True,
+            goal_progress=f"[warning] evaluator response malformed ({type(e).__name__}) — defaulting to continue",
+            unexpected_results=f"raw LLM output preview: {raw_preview[:120]}",
         )
 
     # Update plan step status based on evaluation

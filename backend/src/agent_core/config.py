@@ -95,6 +95,16 @@ class Settings(BaseSettings):
         default=False,
         description="Skip confirmation for low-risk, high-confidence actions"
     )
+    enable_evaluate_js: bool = Field(
+        default=False,
+        description=(
+            "Allow the agent to call evaluate_js (arbitrary JavaScript in page "
+            "context). Disabled by default — only enable in trusted development "
+            "environments. Must NEVER be True in public/store builds because a "
+            "spoofed or leaked session token would let an attacker run arbitrary "
+            "JS in any tab the user opens."
+        ),
+    )
 
     # Server configuration
     server_host: str = Field(default="0.0.0.0")

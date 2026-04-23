@@ -242,7 +242,7 @@ class SimulatedBrowser:
 
 
 async def test():
-    uri = "ws://localhost:8000/ws"
+    uri = "ws://localhost:8002/ws"
     print(f"Connecting to {uri} ...")
     print(f"Goal: Find the search box and type 'hello world'\n")
 
