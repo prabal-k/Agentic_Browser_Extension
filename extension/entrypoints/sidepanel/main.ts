@@ -225,14 +225,24 @@ function addPlanMessage(steps: any[], version: number) {
 
   const label = document.createElement('div');
   label.className = 'msg-label';
-  label.textContent = `Agent — Plan v${version}`;
+  // S3.B: milestones are advisory scope, not an executable script. Label it
+  // so the user does not expect the agent to march through steps in order.
+  const countLabel = steps.length <= 1 ? 'Goal' : `Goals (${steps.length})`;
+  label.textContent = `Agent — ${countLabel} · rev ${version}`;
   div.appendChild(label);
 
   for (let i = 0; i < steps.length && i < 6; i++) {
     const step = steps[i];
     const row = document.createElement('div');
     row.className = 'plan-step';
-    row.innerHTML = `<span class="step-num">${i + 1}</span><span>${step.description || step}</span>`;
+    // Use textContent — never innerHTML with agent/LLM-provided strings (XSS).
+    const num = document.createElement('span');
+    num.className = 'step-num';
+    num.textContent = String(i + 1);
+    const desc = document.createElement('span');
+    desc.textContent = (step && (step.description || step)) || '';
+    row.appendChild(num);
+    row.appendChild(desc);
     div.appendChild(row);
   }
 

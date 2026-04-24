@@ -317,6 +317,262 @@ def _build_direct_url(goal_text: str) -> str:
 
 
 # ============================================================
+# F1: Authentication intent detection
+# ============================================================
+
+_AUTH_INTENT_PHRASES = (
+    "sign in", "signin", "sign-in",
+    "log in", "login", "log-in",
+    "with credentials", "with my credentials", "with the credentials",
+    "with your credentials", "with user credentials",
+    "with username and password", "with email and password",
+    "enter credentials", "provide credentials",
+    "authenticate",
+)
+
+
+def _detect_auth_intent(goal_text: str) -> bool:
+    """Return True if the goal explicitly asks to sign in / log in with credentials.
+
+    Kept narrow on purpose — matches common auth verbs and credential references.
+    Avoids false positives on words like "password-protected" in prose.
+    """
+    t = goal_text.lower()
+    return any(p in t for p in _AUTH_INTENT_PHRASES)
+
+
+def _page_has_login_fields(page_context) -> bool:
+    """Detect whether the current page exposes email/password input fields.
+
+    Used as a gate for the credential-prompt fast path — only ask the user for
+    credentials when there is actually a login form ready to receive them.
+    """
+    if not page_context:
+        return False
+    elements = getattr(page_context, "elements", []) or []
+    has_password = False
+    has_email_or_user = False
+    for el in elements:
+        attrs = getattr(el, "attributes", {}) or {}
+        el_type = str(attrs.get("type", "")).lower()
+        el_name = str(attrs.get("name", "")).lower()
+        el_placeholder = str(attrs.get("placeholder", "")).lower()
+        el_aria = str(attrs.get("aria-label", "")).lower()
+        haystack = f"{el_type} {el_name} {el_placeholder} {el_aria}"
+        if el_type == "password" or "password" in haystack:
+            has_password = True
+        if el_type == "email" or any(k in haystack for k in ("email", "username", "user name", "userid")):
+            has_email_or_user = True
+        if has_password and has_email_or_user:
+            return True
+    return has_password
+
+
+def _already_typed_credentials(action_history: list) -> bool:
+    """Return True if a previous action in this task already typed into a password field.
+
+    Avoids re-asking the user for credentials after they have been entered once.
+    """
+    for entry in action_history:
+        action = entry.get("action", {}) or {}
+        at = action.get("action_type", "")
+        desc = str(action.get("description", "")).lower()
+        if at in ("clear_and_type", "type_text") and ("password" in desc or "credential" in desc):
+            return True
+    return False
+
+
+# ============================================================
+# F2: Goal decomposition into plan steps + success criteria
+# ============================================================
+
+# Connective phrases that separate sub-tasks in a compound goal
+_STEP_SPLIT_RE = re.compile(
+    r"""
+    \s*(?:
+        ,\s+then\s+
+        | \.\s+then\s+
+        | ;\s+then\s+
+        | \s+then\s+
+        | ,\s+and\s+then\s+
+        | \s+and\s+then\s+
+        | ,\s+and\s+now\s+
+        | \s+and\s+now\s+
+        | ,\s+after\s+that\s+
+        | \s+after\s+that\s+
+        | \.\s+(?=[A-Z])        # period followed by capital = sentence boundary
+        | ;\s+
+    )\s*
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Imperative verbs that typically begin a new sub-task when used at a comma
+# boundary. Used to further split chunks that the primary connector pattern
+# left glued together (common in commas-only goals).
+_IMPERATIVE_VERBS = (
+    "open", "go", "navigate", "click", "type", "enter", "provide", "give",
+    "signin", "sign in", "login", "log in", "logout", "log out",
+    "clockin", "clock in", "clockout", "clock out",
+    "check", "verify", "confirm", "ensure", "validate", "make sure",
+    "plan", "assign", "auto assign", "create", "submit", "select",
+    "scroll", "wait", "download", "extract", "read", "search", "find",
+    "fill", "upload", "pick",
+)
+
+# Match a comma (or " and ") that precedes an imperative verb at a word boundary.
+# This is the secondary split pass — catches comma-only enumerations like
+# "plan the route, clockin, provide address, and auto assign businesses".
+_IMPERATIVE_PREFIX_ALT = "|".join(re.escape(v) for v in sorted(_IMPERATIVE_VERBS, key=len, reverse=True))
+_SECONDARY_SPLIT_RE = re.compile(
+    rf"\s*(?:,|\band\b)\s+(?=(?:{_IMPERATIVE_PREFIX_ALT})\b)",
+    re.IGNORECASE,
+)
+
+# Verification verbs — sub-tasks containing these become explicit success criteria
+_VERIFY_VERBS = ("check", "verify", "confirm", "ensure", "make sure", "validate")
+
+
+def _split_once(text: str, pattern: re.Pattern) -> list[str]:
+    return [p for p in pattern.split(text) if p and p.strip()]
+
+
+def _decompose_goal_into_steps(goal_text: str) -> list[str]:
+    """Split a compound goal ("do X, then Y, and check Z") into discrete sub-tasks.
+
+    Two-pass split:
+    1. Strong connectors ("then", ". ", "; ", " and then ")
+    2. Secondary pass — commas / " and " immediately followed by an imperative
+       verb, to handle comma-separated imperative enumerations.
+    """
+    primary = _split_once(goal_text, _STEP_SPLIT_RE) or [goal_text]
+
+    expanded: list[str] = []
+    for chunk in primary:
+        expanded.extend(_split_once(chunk, _SECONDARY_SPLIT_RE) or [chunk])
+
+    cleaned: list[str] = []
+    for s in expanded:
+        s = s.strip().strip(".,;:")
+        if not s:
+            continue
+        # Drop throwaway connectors left at boundaries
+        s = re.sub(r"^(and|then|now|also)\s+", "", s, flags=re.IGNORECASE).strip()
+        if s:
+            cleaned.append(s)
+    return cleaned or [goal_text.strip()]
+
+
+def _collapse_to_milestones(sub_tasks: list[str], max_milestones: int = 4) -> list[str]:
+    """Group micro sub-tasks into at most `max_milestones` advisory milestones.
+
+    Rationale (S3.B): upfront plan.steps is purely advisory — decide_action
+    does not execute them in order. Rendering an 8-step script in the
+    sidepanel misleads the user into thinking the agent follows the script,
+    and a long plan biases progress-tracking when the real browser path
+    diverges (missing buttons, auth walls, async reveals). Milestones give
+    the user a rough sense of scope without suggesting fixed ordering. Full
+    sub_tasks remain available via Goal.success_criteria for F7 / verify_goal.
+    """
+    n = len(sub_tasks)
+    if n <= max_milestones:
+        return list(sub_tasks)
+    base, rem = divmod(n, max_milestones)
+    grouped: list[str] = []
+    i = 0
+    for g in range(max_milestones):
+        size = base + (1 if g < rem else 0)
+        grouped.append(" • ".join(sub_tasks[i:i + size]))
+        i += size
+    return grouped
+
+
+def _build_success_criteria(sub_tasks: list[str]) -> list[str]:
+    """Derive LLM-verifiable success criteria from decomposed sub-tasks.
+
+    Every sub-task becomes a criterion; verification-flavoured sub-tasks keep
+    their explicit "check/verify" phrasing so the verifier LLM reasons about
+    evidence, not just action completion.
+    """
+    criteria: list[str] = []
+    for task in sub_tasks:
+        if not task:
+            continue
+        t = task.strip()
+        if any(v in t.lower() for v in _VERIFY_VERBS):
+            criteria.append(t)
+        else:
+            criteria.append(f"Completed: {t}")
+    return criteria
+
+
+# ============================================================
+# F7: Done-premature guard — contradiction / empty-evidence detection
+# ============================================================
+
+_CONTRADICTION_MARKERS = (
+    "no routes", "no route", "no results", "no result", "no items",
+    "no businesses", "no business", "no data", "no visits",
+    "not found", "not available", "not assigned",
+    "unable to", "could not", "couldn't", "failed to",
+    "nothing scheduled", "none scheduled", "no tasks",
+    "empty list", "empty state",
+)
+
+# Goal verbs that imply the agent must produce evidence (not just declare done)
+_EVIDENCE_REQUIRED_VERBS = (
+    "assign", "check", "verify", "confirm", "count", "find", "plan",
+    "create", "ensure", "validate", "open", "submit", "clock",
+)
+
+
+def _looks_like_contradicted_done(summary: str, goal_text: str) -> bool:
+    """Return True if a done() summary admits failure on an evidence-required goal.
+
+    Catches the premature-done pattern where the agent clicks a few buttons and
+    declares success even though the extract_text it ran contained "No routes
+    scheduled" / "no results" / similar negative markers.
+    """
+    if not summary:
+        return False
+    s = summary.lower()
+    if not any(m in s for m in _CONTRADICTION_MARKERS):
+        return False
+    g = goal_text.lower()
+    return any(v in g for v in _EVIDENCE_REQUIRED_VERBS)
+
+
+def _action_history_has_evidence(action_history: list) -> bool:
+    """True when the task has produced real findings — extract/visual/export."""
+    for entry in action_history:
+        result = entry.get("result", {}) or {}
+        extracted = result.get("extracted_data")
+        if extracted and isinstance(extracted, str) and len(extracted.strip()) > 40:
+            if not extracted.startswith("data:image"):
+                return True
+        if result.get("export_id"):
+            return True
+    return False
+
+
+def _extraction_contradicts_step(extracted_data: str, step_description: str) -> bool:
+    """Return True if an extract/read result overtly contradicts the active plan step.
+
+    Used by observe() to catch mid-task contradictions that would otherwise let
+    the loop keep clicking. Mirrors F7's done-guard, but fires earlier — the
+    moment the page itself admits the expected state does not exist (e.g.
+    "No routes scheduled" while the plan is still on step "plan the route").
+    """
+    if not extracted_data or not step_description:
+        return False
+    ed = extracted_data.lower()
+    if not any(m in ed for m in _CONTRADICTION_MARKERS):
+        return False
+    sd = step_description.lower()
+    return any(v in sd for v in _EVIDENCE_REQUIRED_VERBS)
+
+
+# ============================================================
 # Node 1: Analyze Goal + Create Plan (merged — single LLM call)
 # ============================================================
 
@@ -360,35 +616,66 @@ async def analyze_and_plan(state: AgentState) -> dict:
             logger.info("output_format_detected", format=fmt)
             break
 
+    # F2: decompose compound goals ("do X, then Y, then verify Z") into sub-tasks
+    # so verify_goal can gate finalize against real success_criteria.
+    sub_tasks = _decompose_goal_into_steps(goal_text)
+    success_criteria = _build_success_criteria(sub_tasks) if len(sub_tasks) > 1 else []
+    is_compound = len(sub_tasks) > 1
+    if is_compound:
+        logger.info("goal_decomposed", step_count=len(sub_tasks))
+
     # Build goal with original text preserved — no rewriting
     goal = Goal(
         original_text=goal_text,
         interpreted_goal=goal_text,  # Keep original — don't rewrite
-        sub_goals=[],
-        success_criteria=[],  # decide_action will reason about this
+        sub_goals=sub_tasks if is_compound else [],
+        success_criteria=success_criteria,
         constraints=["Never submit payment without user confirmation", "Never interact with ads"],
         complexity=complexity,
         is_achievable=True,
         output_format=output_format,
     )
 
-    # Build a minimal plan — just the first obvious action
-    # The reactive loop will figure out the rest step by step
-    first_step_desc = "Execute the task"
+    # Build plan steps. For compound goals, one PlanStep per sub-task so
+    # progress tracking is meaningful. Otherwise keep the reactive single-step plan.
     page_context = state.get("page_context")
     is_blank = not page_context or getattr(page_context, "url", "").startswith("about:")
 
-    if target_url and is_blank:
-        first_step_desc = f"Navigate to {target_url}"
-    elif is_blank:
-        first_step_desc = "Navigate to the relevant website or search engine"
-
-    plan = Plan(
-        steps=[PlanStep(step_id=1, description=first_step_desc, expected_outcome="Page loaded")],
-        current_step_index=0,
-        plan_version=1,
-        original_reasoning="Reactive mode — one step at a time",
-    )
+    if is_compound:
+        # S3.B: plan.steps are advisory milestones, not a script. Collapse
+        # micro sub-tasks into at most 4 milestones so the sidepanel renders
+        # a scope checklist, not a step-by-step playbook. Fine-grained
+        # sub_tasks survive on Goal.success_criteria for F7/verify_goal.
+        milestones = _collapse_to_milestones(sub_tasks, max_milestones=4)
+        plan_steps: list[PlanStep] = []
+        for idx, task in enumerate(milestones, start=1):
+            plan_steps.append(PlanStep(
+                step_id=idx,
+                description=task,
+                expected_outcome=f"Milestone {idx} evidence gathered",
+            ))
+        plan = Plan(
+            steps=plan_steps,
+            current_step_index=0,
+            plan_version=1,
+            original_reasoning=(
+                f"Decomposed compound goal into {len(sub_tasks)} sub-tasks, "
+                f"grouped into {len(plan_steps)} advisory milestones "
+                f"(execution stays reactive)"
+            ),
+        )
+    else:
+        first_step_desc = "Execute the task"
+        if target_url and is_blank:
+            first_step_desc = f"Navigate to {target_url}"
+        elif is_blank:
+            first_step_desc = "Navigate to the relevant website or search engine"
+        plan = Plan(
+            steps=[PlanStep(step_id=1, description=first_step_desc, expected_outcome="Page loaded")],
+            current_step_index=0,
+            plan_version=1,
+            original_reasoning="Reactive mode — one step at a time",
+        )
 
     # If we have a target URL (from user text or direct URL construction),
     # skip the LLM and auto-navigate — zero LLM calls for the first action
@@ -838,6 +1125,44 @@ async def decide_action(state: AgentState) -> dict:
                 "pending_input_field_type": "",
             }
 
+    # --- FAST PATH (F1): Ask user for credentials on auth goals ---
+    # Trigger: goal has sign-in intent, page shows a login form, we have no
+    # stored credentials yet, and we have not already typed into a password
+    # field. Fires without an LLM call so we don't waste a decision on
+    # "click random button and hope for the best" behaviour.
+    goal_obj = state.get("goal")
+    goal_text = goal_obj.original_text if goal_obj else ""
+    stored_creds = state.get("_stored_credentials", {}) or {}
+    has_creds = bool(stored_creds.get("email") or stored_creds.get("password"))
+    page_ctx = state.get("page_context")
+    if (
+        _detect_auth_intent(goal_text)
+        and not has_creds
+        and not _already_typed_credentials(action_history)
+        and _page_has_login_fields(page_ctx)
+    ):
+        logger.info("credential_prompt_triggered",
+                    reason="auth_intent_and_login_form_detected")
+        question = (
+            "This task requires signing in. Please provide your login credentials "
+            "(e.g. 'email is you@example.com and password is yourPassword')."
+        )
+        action = Action(
+            action_id=f"act_{uuid.uuid4().hex[:8]}",
+            action_type=ActionType.DONE,  # ASKING_USER route reuses DONE type + value
+            value=question,
+            description="Request login credentials from user before submitting form",
+            confidence=1.0,
+            requires_confirmation=False,
+            risk_level="low",
+        )
+        return {
+            "current_action": action,
+            "cognitive_status": CognitiveStatus.ASKING_USER,
+            "current_reasoning": "Detected sign-in goal on a login form — asking user for credentials.",
+            "pending_input_field_type": "credentials",
+        }
+
     # --- FAST PATH: Execute queued action (no LLM call) ---
     # If a previous cycle queued predictable follow-up actions, execute the next one.
     queued = state.get("_queued_actions", [])
@@ -1012,11 +1337,16 @@ async def decide_action(state: AgentState) -> dict:
     # Use dynamic tool selection based on context
     goal = state.get("goal", Goal(original_text=""))
 
+    # S3.B: do NOT pass current_step to tool-selection. Tools are picked from
+    # page_context + goal_text — feeding a single advisory milestone biases
+    # tool choice when the browser has diverged from the notional plan
+    # (auth wall, missing element, etc.). The overall goal already captures
+    # intent; current_step was previously advisory-but-sticky.
     llm = get_action_llm_dynamic(
         model_name=model_name,
         api_keys=state.get("api_keys"),
         page_context=state.get("page_context"),
-        current_step=current_step.description if current_step else "",
+        current_step="",
         action_history=action_history,
         goal_text=goal.original_text,
     )
@@ -1227,6 +1557,47 @@ async def decide_action(state: AgentState) -> dict:
                 action_type = ActionType.EXTRACT_TEXT
                 args = {"value": "__EXTRACT_LISTINGS__", "description": f"Extract {template['name']} data"}
                 is_done = False
+
+        # F7: done-premature guard — contradiction + no-evidence detection.
+        # If the LLM is calling done() but its own summary admits failure
+        # ("No routes scheduled", "no results", "unable to...") on a goal that
+        # requires evidence, force a re-plan instead of finalising prematurely.
+        if is_done:
+            done_summary = args.get("summary") or args.get("value") or ""
+            _plan = state.get("plan", Plan())
+            contradiction = _looks_like_contradicted_done(done_summary, goal.original_text)
+            missing_evidence = (
+                len(goal.success_criteria) >= 2
+                and not _action_history_has_evidence(action_history)
+            )
+            if (contradiction or missing_evidence) and _plan.plan_version < 3:
+                reason_parts = []
+                if contradiction:
+                    reason_parts.append("done() summary contains failure markers")
+                if missing_evidence:
+                    reason_parts.append(
+                        f"no evidence gathered for {len(goal.success_criteria)} success criteria"
+                    )
+                replan_reason = " and ".join(reason_parts)
+                logger.info("premature_done_blocked_contradiction",
+                            reason=replan_reason,
+                            summary_preview=done_summary[:120])
+                updated_plan = Plan(
+                    steps=list(_plan.steps),
+                    current_step_index=_plan.current_step_index,
+                    plan_version=_plan.plan_version + 1,
+                    original_reasoning=_plan.original_reasoning,
+                    re_plan_reason=f"Premature done blocked: {replan_reason}",
+                )
+                return {
+                    "plan": updated_plan,
+                    "cognitive_status": CognitiveStatus.RE_PLANNING,
+                    "current_action": None,
+                    "current_reasoning": (
+                        f"Blocked premature done. {replan_reason}. "
+                        "Must gather concrete evidence before completing."
+                    ),
+                }
 
         # Determine risk level and confirmation requirement
         latest_traces = state.get("reasoning_traces", [])
@@ -1520,6 +1891,52 @@ async def observe(state: AgentState) -> dict:
             f"Previous action gathered information. "
             f"Findings: {findings_preview}"
         )
+
+    # F6: contradiction-driven mid-task re-plan. If the extract/read result
+    # overtly admits the expected state does not exist ("no routes scheduled",
+    # "not found", etc.) while the current plan step still requires evidence,
+    # force a re-plan instead of letting decide_action keep clicking toward a
+    # dead-end page. Paired with F7 (which catches the same pattern at done()).
+    plan = state.get("plan", Plan())
+    goal = state.get("goal")
+    goal_text = goal.original_text if goal else ""
+    current_step = plan.current_step
+    current_step_desc = current_step.description if current_step else goal_text
+    if (
+        result
+        and result.extracted_data
+        and plan.plan_version < 3
+        and _extraction_contradicts_step(result.extracted_data, current_step_desc)
+    ):
+        logger.info(
+            "observe_contradiction_replan",
+            step=current_step_desc[:80],
+            extract_preview=result.extracted_data[:120],
+            plan_version=plan.plan_version,
+        )
+        bumped_plan = Plan(
+            steps=list(plan.steps),
+            current_step_index=plan.current_step_index,
+            plan_version=plan.plan_version + 1,
+            original_reasoning=plan.original_reasoning,
+            re_plan_reason=(
+                f"Contradiction during execution: extracted content admits "
+                f"the expected state is absent for step "
+                f"'{current_step_desc[:80]}'. Re-plan with a different approach."
+            ),
+        )
+        return {
+            "task_memory": new_memory,
+            "action_history": action_history,
+            "previous_page_context": state.get("page_context"),
+            "plan": bumped_plan,
+            "cognitive_status": CognitiveStatus.RE_PLANNING,
+            "current_action": None,
+            "current_reasoning": (
+                f"Mid-task contradiction detected. Page content contradicts the "
+                f"active step. {bumped_plan.re_plan_reason}"
+            ),
+        }
 
     return {
         "task_memory": new_memory,

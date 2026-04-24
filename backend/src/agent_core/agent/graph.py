@@ -255,11 +255,26 @@ async def execute_action_node(state: AgentState) -> dict:
             "should_terminate": True,
         }
 
+    # Look up the element's stable fingerprint from the current page_context
+    # so the extension can fall back to it if element_id is stale by the time
+    # the action is dispatched (DOM mutation between decide and execute).
+    element_fingerprint = action.element_fingerprint
+    if element_fingerprint is None and action.element_id is not None:
+        page_ctx = state.get("page_context")
+        if page_ctx and hasattr(page_ctx, "elements"):
+            for el in page_ctx.elements:
+                if getattr(el, "element_id", None) == action.element_id:
+                    fp = getattr(el, "fingerprint", "")
+                    if fp:
+                        element_fingerprint = fp
+                    break
+
     # INTERRUPT: Send action to browser, wait for result
     execution_request = {
         "action_id": action.action_id,
         "action_type": action.action_type.value,
         "element_id": action.element_id,
+        "element_fingerprint": element_fingerprint,
         "value": action.value,
         "description": action.description,
     }
@@ -346,14 +361,18 @@ def route_after_reasoning(
 
 def route_after_decision(
     state: AgentState,
-) -> Literal["confirm_action", "execute_action_node", "ask_user_node", "finalize"]:
-    """Route after action decision: confirm, execute directly, ask, or finish."""
+) -> Literal["confirm_action", "execute_action_node", "ask_user_node", "create_plan", "finalize"]:
+    """Route after action decision: confirm, execute directly, ask, re-plan, or finish."""
     status = state.get("cognitive_status")
     action = state.get("current_action")
 
     # Ask user takes priority — agent needs clarification before proceeding
     if status == CognitiveStatus.ASKING_USER:
         return "ask_user_node"
+
+    # F7: premature-done guard may set RE_PLANNING from decide_action
+    if status == CognitiveStatus.RE_PLANNING:
+        return "create_plan"
 
     if status == CognitiveStatus.COMPLETED or (action and action.action_type == ActionType.DONE):
         return "finalize"
@@ -495,7 +514,17 @@ def create_agent_graph(checkpointer=None) -> StateGraph:
 
     # Execution → Observe → Smart Evaluate → [LLM Evaluate if needed] → Self-Critique
     builder.add_edge("execute_action_node", "observe")
-    builder.add_edge("observe", "smart_evaluate")
+
+    # F6: observe may flip to RE_PLANNING when an extract result contradicts
+    # the active plan step — route straight to create_plan instead of letting
+    # smart_evaluate and self_critique loop back into decide_action on a
+    # dead-end page.
+    def route_after_observe(state: AgentState) -> Literal["smart_evaluate", "create_plan"]:
+        if state.get("cognitive_status") == CognitiveStatus.RE_PLANNING:
+            return "create_plan"
+        return "smart_evaluate"
+
+    builder.add_conditional_edges("observe", route_after_observe)
     builder.add_conditional_edges("smart_evaluate", route_after_smart_evaluate)
     builder.add_edge("evaluate", "self_critique_action")
 

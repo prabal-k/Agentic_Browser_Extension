@@ -248,10 +248,19 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
     session.iteration_count = 0
     session.action_count = 0
 
-    model_name = model_override or settings.ollama_model
-
-    # Resolve API keys from vault (session keys > .env keys)
+    # Resolve model + keys with explicit precedence:
+    #   1. vault_keys.preferred_model   (user picked a specific model in Settings)
+    #   2. vault_keys.preferred_provider (user picked a provider, use its default)
+    #   3. model_override                (per-goal override from sidepanel dropdown)
+    #   4. settings.ollama_model         (global default from .env)
+    # Previously the default was baked in before the vault lookup, so an empty
+    # model_override shadowed the user's saved provider/model selection.
+    model_name: str | None = None
+    model_source: str = "settings"
     api_keys = None
+    preferred_provider: str | None = None
+
+    vault_keys = None
     if session.vault_token:
         vault_keys = key_vault.get_keys(session.vault_token)
         if vault_keys is None:
@@ -262,37 +271,58 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
             await send_msg(ws, "server_warning",
                            message="Your API key session has expired (server may have restarted). "
                                    "Please re-submit your API keys in Settings.")
-        if vault_keys:
-            api_keys = {}
-            openai_key = vault_keys.openai_api_key.get_secret_value()
-            groq_key = vault_keys.groq_api_key.get_secret_value()
-            openrouter_key = vault_keys.openrouter_api_key.get_secret_value()
-            if openai_key:
-                api_keys["openai_api_key"] = openai_key
-            if groq_key:
-                api_keys["groq_api_key"] = groq_key
-            if openrouter_key:
-                api_keys["openrouter_api_key"] = openrouter_key
-            if vault_keys.ollama_base_url:
-                api_keys["ollama_base_url"] = vault_keys.ollama_base_url
 
-            # Use preferred model from vault if no explicit override
-            if not model_override and vault_keys.preferred_model:
-                model_name = vault_keys.preferred_model
-            # If provider is set but no specific model, use that provider's default
-            elif not model_override and vault_keys.preferred_provider:
-                provider_defaults = {
-                    "openai": settings.openai_model,
-                    "groq": settings.groq_model,
-                    "openrouter": settings.openrouter_model,
-                    "ollama": settings.ollama_model,
-                }
-                model_name = provider_defaults.get(
-                    vault_keys.preferred_provider, model_name
-                )
+    if vault_keys:
+        api_keys = {}
+        openai_key = vault_keys.openai_api_key.get_secret_value()
+        groq_key = vault_keys.groq_api_key.get_secret_value()
+        openrouter_key = vault_keys.openrouter_api_key.get_secret_value()
+        if openai_key:
+            api_keys["openai_api_key"] = openai_key
+        if groq_key:
+            api_keys["groq_api_key"] = groq_key
+        if openrouter_key:
+            api_keys["openrouter_api_key"] = openrouter_key
+        if vault_keys.ollama_base_url:
+            api_keys["ollama_base_url"] = vault_keys.ollama_base_url
+        if vault_keys.preferred_provider:
+            preferred_provider = vault_keys.preferred_provider
+            # Thread provider choice through api_keys so llm_client can trust
+            # it instead of sniffing the model name (avoids misrouting e.g.
+            # an OpenRouter model whose name happens to contain 'gpt').
+            api_keys["preferred_provider"] = preferred_provider
 
-            if not api_keys:
-                api_keys = None
+        if vault_keys.preferred_model:
+            model_name = vault_keys.preferred_model
+            model_source = "vault.preferred_model"
+        elif vault_keys.preferred_provider:
+            provider_defaults = {
+                "openai": settings.openai_model,
+                "groq": settings.groq_model,
+                "openrouter": settings.openrouter_model,
+                "ollama": settings.ollama_model,
+            }
+            mapped = provider_defaults.get(vault_keys.preferred_provider)
+            if mapped:
+                model_name = mapped
+                model_source = f"vault.preferred_provider:{vault_keys.preferred_provider}"
+
+        if not api_keys:
+            api_keys = None
+
+    if model_name is None and model_override:
+        model_name = model_override
+        model_source = "per_goal_override"
+    if model_name is None:
+        model_name = settings.ollama_model
+        model_source = "settings.ollama_model"
+
+    logger.info("model_resolved",
+                session_id=session.session_id,
+                model=model_name,
+                source=model_source,
+                preferred_provider=preferred_provider,
+                has_vault_keys=api_keys is not None)
 
     logger.info("goal_received",
                 session_id=session.session_id,

@@ -98,6 +98,10 @@ SYSTEM_REASONING = """Analyze the page. Adapt if it doesn't match expectations. 
 
 SYSTEM_ACTION_DECISION = """You are an autonomous browser agent. Pick the BEST next action. Think carefully, then call ONE tool.
 
+## PLANNING IS REACTIVE — NOT A SCRIPT
+
+The goal may have sub-objectives (shown as milestones in progress). Those are an advisory checklist, NOT a sequence you must execute in order. Pick the single best next action FOR THE CURRENT PAGE to advance ANY of the objectives. If the page has diverged from what you expected (missing button, auth wall, firewall, error page), adapt — do not force the next "scripted" step. Reality beats the plan.
+
 ## BEFORE EVERY ACTION — Run this checklist (top to bottom, first match wins):
 
 1. BLOCKER CHECK: Is there a modal, dialog, overlay, cookie banner, or popup?

@@ -90,8 +90,18 @@ def get_llm(
     if model_name is None:
         model_name = settings.ollama_model
 
-    provider = detect_provider(model_name)
     keys = api_keys or {}
+
+    # Trust explicit preferred_provider over name-sniffing. Without this, an
+    # OpenRouter model whose name happens to contain "gpt" gets misrouted to
+    # OpenAI, and a custom local Ollama model named like an OpenAI model
+    # would hit the remote OpenAI endpoint. ws_handler threads the user's
+    # Settings choice through api_keys["preferred_provider"].
+    explicit = (keys.get("preferred_provider") or "").strip().lower()
+    if explicit in {"openai", "groq", "openrouter", "ollama"}:
+        provider = LLMProvider(explicit)
+    else:
+        provider = detect_provider(model_name)
 
     if provider == LLMProvider.OPENAI:
         # Resolution: session key > AGENT_OPENAI_API_KEY > OPENAI_API_KEY env var > error

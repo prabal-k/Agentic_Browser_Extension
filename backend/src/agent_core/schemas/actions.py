@@ -94,6 +94,14 @@ class Action(BaseModel):
         default=None,
         description="Target element ID from the DOM snapshot. Required for element interactions."
     )
+    element_fingerprint: str | None = Field(
+        default=None,
+        description=(
+            "Optional stable identity hash of the target element. When "
+            "supplied, the extension falls back to this if element_id is "
+            "stale. Passed through from DOMElement.fingerprint."
+        ),
+    )
     value: str | None = Field(
         default=None,
         description=(

@@ -99,8 +99,20 @@ export default defineBackground(() => {
     return serverUrl;
   }
 
-  function connectWebSocket() {
+  async function connectWebSocket() {
     if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
+
+    // Always re-read the freshest session token from storage before opening
+    // the WS. The module-level `sessionToken` can be stale when a
+    // service-worker restart happens between settings-save and the first
+    // goal submission — without this re-read, the token never reaches the
+    // backend and the per-user provider/model selection is silently ignored.
+    try {
+      const stored = await chrome.storage.session.get('sessionToken');
+      if (stored?.sessionToken) sessionToken = stored.sessionToken;
+    } catch (err: any) {
+      console.warn('[Agentic] Failed to read sessionToken from storage:', err?.message);
+    }
 
     intentionalDisconnect = false; // Allow reconnection from this point
     broadcastToSidePanel({ type: 'connection_status', status: 'connecting' });
@@ -332,12 +344,35 @@ export default defineBackground(() => {
     return tab.id;
   }
 
+  async function collectOpenTabs(): Promise<{ tab_id: number; url: string; title: string; active: boolean }[]> {
+    try {
+      const tabs = await chrome.tabs.query({ currentWindow: true });
+      return tabs
+        .filter((t: any) => t.id != null)
+        .map((t: any) => ({
+          tab_id: t.id as number,
+          url: t.url || '',
+          title: t.title || '',
+          active: !!t.active,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
   async function extractDomFromTab(tabId: number): Promise<any> {
     await ensureContentScript(tabId);
     // The content script now handles SPA hydration waiting internally
     const result = await chrome.tabs.sendMessage(tabId, { type: 'extract_dom' });
     if (!result?.success) throw new Error('DOM extraction returned empty result');
-    return result.data;
+    // Enrich snapshot with multi-tab context so the backend PageContext can
+    // surface tab awareness to the LLM without another round-trip.
+    const open_tabs = await collectOpenTabs();
+    return {
+      ...result.data,
+      current_tab_id: tabId,
+      open_tabs,
+    };
   }
 
   async function extractDomFromActiveTab(): Promise<any> {
@@ -494,6 +529,7 @@ export default defineBackground(() => {
         action: {
           action_type: action.action_type,
           element_id: action.element_id,
+          element_fingerprint: action.element_fingerprint,
           value: action.value,
         },
       });

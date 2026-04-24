@@ -38,6 +38,11 @@ interface DOMElement {
   css_selector: string;
   is_leaf: boolean;
   depth: number;
+  // Stable identity across re-extractions. Hash of tag + role + visible
+  // text + parent_context + bucketed bounding box. Survives minor DOM
+  // reorderings (React re-renders, MutationObserver churn) that would
+  // otherwise invalidate a numeric element_id.
+  fingerprint: string;
 }
 
 interface PageContext {
@@ -56,6 +61,34 @@ interface PageContext {
 
 // --- Element ID ↔ DOM node mapping ---
 const elementMap = new Map<number, Element>();
+// Secondary index: fingerprint → Element. Enables resolution when the
+// numeric element_id is stale (post-mutation) but the element itself is
+// still on the page.
+const fingerprintMap = new Map<string, Element>();
+// Reverse index for cheap fingerprint emission per element.
+const elementFingerprints = new WeakMap<Element, string>();
+
+function computeFingerprint(
+  tag: string,
+  role: string,
+  text: string,
+  parentContext: string,
+  rect: DOMRect | null,
+): string {
+  const bboxBucket = rect
+    ? `${Math.round(rect.x / 50) * 50}x${Math.round(rect.y / 50) * 50}`
+    : 'noframe';
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 60).toLowerCase();
+  const key = [tag, role || '-', norm(text), norm(parentContext), bboxBucket].join('|');
+  // Small non-crypto hash (FNV-1a 32-bit) — collisions on a page of hundreds
+  // of elements are vanishingly rare given the high-entropy input.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
 
 // --- Tag to element type mapping ---
 const TAG_TYPE_MAP: Record<string, string> = {
@@ -237,6 +270,7 @@ function collectElements(root: Document | ShadowRoot | Element, selectors: strin
 
 function extractPageContext(maxInteractive = 250, maxInfo = 50): PageContext {
   elementMap.clear();
+  fingerprintMap.clear();
 
   const seen = new Set<Element>();
   const elements: DOMElement[] = [];
@@ -299,6 +333,14 @@ function extractPageContext(maxInteractive = 250, maxInfo = 50): PageContext {
     const inViewport = rect.top < viewportHeight + scrollY && rect.bottom > scrollY;
 
     elementMap.set(id, el);
+    const role = el.getAttribute('role') || '';
+    const fingerprint = computeFingerprint(tag, role, text, parentContext, rect);
+    // First fingerprint wins on collision — preserves the earliest (often
+    // primary) element registered under a given identity.
+    if (!fingerprintMap.has(fingerprint)) {
+      fingerprintMap.set(fingerprint, el);
+    }
+    elementFingerprints.set(el, fingerprint);
 
     elements.push({
       element_id: id,
@@ -320,6 +362,7 @@ function extractPageContext(maxInteractive = 250, maxInfo = 50): PageContext {
       css_selector: buildSelector(el),
       is_leaf: el.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"]').length === 0,
       depth: (() => { let d = 0; let p = el.parentElement; while (p && p !== document.body) { d++; p = p.parentElement; } return d; })(),
+      fingerprint,
     });
 
     return true;
@@ -507,6 +550,10 @@ interface ActionRequest {
   action_type: string;
   element_id: number | null;
   value?: string;
+  // Optional stable identity. When the numeric element_id is stale (DOM
+  // mutated between decide_action and execute) the resolver falls back to
+  // this fingerprint to find the original element in the current DOM.
+  element_fingerprint?: string;
 }
 
 interface ActionResult {
@@ -995,14 +1042,26 @@ function isElementVisible(el: Element): boolean {
 }
 
 async function dispatchAction(action: ActionRequest): Promise<ActionResult> {
-  const { action_type, element_id, value } = action;
+  const { action_type, element_id, value, element_fingerprint } = action;
 
-  // Get target element
+  // Resolve target element — three-tier lookup: numeric id → fingerprint →
+  // fingerprint→CSS-selector re-query. This survives mutations that would
+  // otherwise break a naive element_id reference.
   let el: Element | undefined;
   if (element_id != null) {
     el = elementMap.get(element_id);
+    if (!el && element_fingerprint) {
+      const fp = fingerprintMap.get(element_fingerprint);
+      if (fp && document.contains(fp)) el = fp;
+    }
     if (!el) {
-      return { status: 'element_not_found', message: `Element ${element_id} not found in current DOM map`, page_changed: false, execution_time_ms: 0 };
+      return { status: 'element_not_found', message: `Element ${element_id} not found in current DOM map${element_fingerprint ? ' (fingerprint fallback also missed)' : ''}`, page_changed: false, execution_time_ms: 0 };
+    }
+  } else if (element_fingerprint) {
+    const fp = fingerprintMap.get(element_fingerprint);
+    if (fp && document.contains(fp)) el = fp;
+    if (!el) {
+      return { status: 'element_not_found', message: `No element matched fingerprint ${element_fingerprint}`, page_changed: false, execution_time_ms: 0 };
     }
   }
 
@@ -1388,6 +1447,50 @@ function stopObserver() {
   observer = null;
 }
 
+// --- SPA Route Observer ---
+// Client-side routing (React/Vue/Next) updates the URL via history.pushState /
+// replaceState without firing a full page load, so `load` events and the
+// background's ensureContentScript flow never fire and the elementMap goes
+// stale. Intercept the history API + popstate/hashchange so the agent sees
+// routes change in real SPAs.
+
+let spaRouteHookInstalled = false;
+
+function installSpaRouteHook() {
+  if (spaRouteHookInstalled) return;
+  spaRouteHookInstalled = true;
+
+  const notify = (reason: string) => {
+    try {
+      if (!chrome.runtime?.id) return;
+      // Drop stale element map so next extract_dom returns fresh IDs
+      elementMap.clear();
+      chrome.runtime.sendMessage({ type: 'dom_changed', reason }).catch(() => {
+        /* background may be asleep — no-op */
+      });
+    } catch {
+      /* swallow */
+    }
+  };
+
+  const origPush = history.pushState;
+  const origReplace = history.replaceState;
+
+  history.pushState = function (this: History, ...args: any[]) {
+    const ret = origPush.apply(this, args as any);
+    notify('pushState');
+    return ret;
+  };
+  history.replaceState = function (this: History, ...args: any[]) {
+    const ret = origReplace.apply(this, args as any);
+    notify('replaceState');
+    return ret;
+  };
+
+  window.addEventListener('popstate', () => notify('popstate'));
+  window.addEventListener('hashchange', () => notify('hashchange'));
+}
+
 // --- Message Handler ---
 
 export default defineContentScript({
@@ -1401,6 +1504,12 @@ export default defineContentScript({
 
     // Start observing DOM changes
     startObserver();
+
+    // Hook SPA route changes (pushState/replaceState/popstate/hashchange).
+    // Content script is injected once per tab lifetime; history navigations
+    // within an SPA do not re-fire this main(), so we must install the hook
+    // here and let it persist across route changes.
+    installSpaRouteHook();
 
     /**
      * Wait for SPA hydration — polls until interactive elements appear.

@@ -81,6 +81,15 @@ class DOMElement(BaseModel):
     element_id: int = Field(
         description="Numeric ID assigned during extraction. Unique within a single page snapshot."
     )
+    fingerprint: str = Field(
+        default="",
+        description=(
+            "Stable identity hash across re-extractions. When the numeric "
+            "element_id is invalidated by a DOM mutation, the extension "
+            "resolver falls back to this fingerprint. Derived from tag + "
+            "role + visible text + parent context + bucketed bounding box."
+        ),
+    )
     element_type: ElementType = Field(
         description="Semantic type of the element (button, link, text_input, etc.)"
     )
@@ -265,6 +274,18 @@ class PageContext(BaseModel):
         default=0.0,
         description="Unix timestamp when this snapshot was captured"
     )
+    current_tab_id: int | None = Field(
+        default=None,
+        description="Chrome tab ID of the tab this snapshot was captured from"
+    )
+    open_tabs: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "All browser tabs currently open: [{tab_id, url, title, active}]. "
+            "Enables the agent to reason about multi-tab workflows without "
+            "having to call list_tabs explicitly."
+        ),
+    )
 
     @property
     def interactive_elements(self) -> list[DOMElement]:
@@ -296,6 +317,19 @@ class PageContext(BaseModel):
             f"URL: {self.url}",
             f"Title: {self.title}",
         ]
+
+        # Multi-tab awareness: only surface when there are 2+ tabs (single-tab
+        # is the norm and would just waste prompt budget).
+        if self.open_tabs and len(self.open_tabs) >= 2:
+            tab_lines = []
+            for t in self.open_tabs[:8]:  # cap to avoid prompt bloat
+                tid = t.get("tab_id", "?")
+                url = (t.get("url", "") or "")[:60]
+                title = (t.get("title", "") or "")[:40]
+                marker = "*" if t.get("active") or tid == self.current_tab_id else " "
+                tab_lines.append(f"  {marker}[{tid}] {title} — {url}")
+            lines.append(f"Tabs ({len(self.open_tabs)} open, current={self.current_tab_id}):")
+            lines.extend(tab_lines)
 
         if self.has_more_content_below:
             lines.append(f"Scroll: {self.scroll_position:.0%} (more below)")
