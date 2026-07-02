@@ -9,8 +9,17 @@ payload/resume shape, so the browser side (ws_handler/orchestrator) is unchanged
 
 import uuid
 
-from agent_core.schemas.actions import Action, ActionType
+import structlog
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from agent_core.agent.budgets import is_destructive
+from agent_core.agent.llm_client import get_worker_llm
+from agent_core.schemas.actions import Action, ActionResult, ActionStatus, ActionType
+from agent_core.schemas.dom import PageContext
 from agent_core.schemas.orchestrator import ResultDigest
+from agent_core.schemas.orchestrator_state import WorkerState
+
+logger = structlog.get_logger("agent.worker")
 
 # Worker tool name → ActionType. Only the tools any role can bind appear here.
 WORKER_TOOL_TO_ACTION: dict[str, ActionType] = {
@@ -92,3 +101,112 @@ def _digest_from_finish(args: dict, actions_used: int) -> ResultDigest:
         data=args.get("data"),
         actions_used=actions_used,
     )
+
+
+_WORKER_SYSTEM = """You are a focused browser worker. Do ONE subgoal, then call finish_subgoal.
+
+Subgoal: {subgoal}
+Done when: {done_criteria}
+
+Rules:
+- Use only your available tools.
+- Take the single best next action toward the subgoal.
+- The moment the done-criteria are met, call finish_subgoal(summary, data).
+- If you cannot proceed, call finish_subgoal with a summary explaining why.
+"""
+
+
+def _page_summary(page_context: PageContext | None) -> str:
+    if page_context is None:
+        return "No page loaded yet."
+    lines = [f"URL: {page_context.url}", f"Title: {page_context.title}"]
+    elements = getattr(page_context, "elements", []) or []
+    for el in elements[:40]:
+        eid = getattr(el, "element_id", "?")
+        tag = getattr(el, "tag_name", "")
+        text = (getattr(el, "text", "") or "")[:60]
+        lines.append(f"[{eid}] {tag} {text}".rstrip())
+    return "\n".join(lines)
+
+
+async def worker_decide(state: WorkerState) -> dict:
+    """One role-scoped LLM call → the next Action, or a terminal digest."""
+    llm = get_worker_llm(
+        role=state["role"],
+        model_name=state["model_name"],
+        api_keys=state.get("api_keys"),
+    )
+    system = _WORKER_SYSTEM.format(
+        subgoal=state["subgoal"], done_criteria=state["done_criteria"],
+    )
+    history_note = ""
+    if state.get("action_history"):
+        history_note = f"\n\nActions so far: {len(state['action_history'])}."
+    human = f"{_page_summary(state.get('page_context'))}{history_note}"
+
+    response = await llm.ainvoke([
+        SystemMessage(content=system),
+        HumanMessage(content=human),
+    ])
+
+    if not getattr(response, "tool_calls", None):
+        # No tool call — treat as inability to proceed; end gracefully.
+        return {
+            "finished": True,
+            "result_digest": ResultDigest(
+                status="failed",
+                summary="worker produced no tool call",
+                actions_used=state.get("actions_used", 0),
+            ),
+        }
+
+    call = response.tool_calls[0]
+    name, args = call["name"], call.get("args", {})
+
+    if name == "finish_subgoal":
+        return {
+            "finished": True,
+            "result_digest": _digest_from_finish(args, state.get("actions_used", 0)),
+        }
+
+    action = _build_worker_action(name, args)
+    if action is not None and is_destructive(action.action_type):
+        return {
+            "finished": True,
+            "result_digest": ResultDigest(
+                status="needs_user",
+                summary=f"worker wants to run a destructive action: {name}",
+                needs_user=True,
+                question=f"Approve action '{name}' for subgoal: {state['subgoal']}?",
+                actions_used=state.get("actions_used", 0),
+            ),
+        }
+
+    return {"current_action": action, "messages": [response]}
+
+
+def _parse_execution_result(
+    action, execution_result: dict
+) -> tuple[ActionResult, PageContext | None]:
+    """Parse the interrupt resume dict into (ActionResult, new PageContext | None).
+
+    Mirrors execute_action_node (graph.py) so the browser side is unchanged.
+    """
+    result = ActionResult(
+        action_id=action.action_id,
+        status=ActionStatus(execution_result.get("status", "failed")),
+        message=execution_result.get("message", ""),
+        error=execution_result.get("error"),
+        extracted_data=execution_result.get("extracted_data"),
+        page_changed=execution_result.get("page_changed", False),
+        new_url=execution_result.get("new_url"),
+        execution_time_ms=execution_result.get("execution_time_ms", 0),
+    )
+    page = None
+    new_dom = execution_result.get("new_dom")
+    if new_dom:
+        try:
+            page = PageContext.model_validate(new_dom)
+        except Exception:  # noqa: BLE001 — malformed DOM shouldn't crash the worker
+            page = None
+    return result, page
