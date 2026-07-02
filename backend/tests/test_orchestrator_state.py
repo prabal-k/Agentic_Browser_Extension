@@ -64,3 +64,18 @@ class TestLeadMessagesReducer:
         hints = typing.get_type_hints(LeadState, include_extras=True)
         meta = getattr(hints["messages"], "__metadata__", ())
         assert add_messages in meta
+
+
+class TestWorkerStateReactFields:
+    def test_react_fields_initialized(self):
+        from agent_core.schemas.orchestrator import WorkerRole
+        from agent_core.schemas.orchestrator_state import create_worker_state
+        s = create_worker_state(
+            role=WorkerRole.NAVIGATOR, subgoal="go", done_criteria="there",
+            model_name="gpt-4o-mini",
+        )
+        assert s["current_action"] is None
+        assert s["pending_result"] is None
+        assert s["previous_page_context"] is None
+        assert s["messages"] == []
+        assert s["finished"] is False

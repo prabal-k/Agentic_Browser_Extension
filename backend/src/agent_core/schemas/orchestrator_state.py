@@ -10,6 +10,7 @@ from typing import Annotated, TypedDict
 
 from langgraph.graph.message import add_messages
 
+from agent_core.schemas.actions import Action, ActionResult
 from agent_core.schemas.dom import PageContext
 from agent_core.schemas.orchestrator import PlanItem, ResultDigest, WorkerRole
 
@@ -42,6 +43,11 @@ class WorkerState(TypedDict, total=False):
     result_digest: ResultDigest | None
     model_name: str
     api_keys: dict | None
+    current_action: Action | None          # action chosen this turn, awaiting execution
+    pending_result: ActionResult | None     # result of the last executed action
+    previous_page_context: PageContext | None
+    finished: bool                          # set when finish_subgoal is called
+    messages: Annotated[list, add_messages]  # worker's own ReAct tool-call thread
 
 
 def create_lead_state(
@@ -86,4 +92,9 @@ def create_worker_state(
         result_digest=None,
         model_name=model_name,
         api_keys=api_keys,
+        current_action=None,
+        pending_result=None,
+        previous_page_context=None,
+        finished=False,
+        messages=[],
     )
