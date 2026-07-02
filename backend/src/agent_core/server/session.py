@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 import structlog
 
 from agent_core.agent.graph import create_agent_graph
+from agent_core.agent.lead_graph import build_lead_graph
+from agent_core.config import settings
 
 logger = structlog.get_logger("server.session")
 
@@ -33,6 +35,7 @@ class Session:
     vault_token: str | None = None  # KeyVault token for this session's API keys
     session_memory_k: int = 6  # Keep last k messages for context across goals (default: 6 = past 3 conversations)
     pending_dom_update: object | None = None  # Pending DOM update from CLIENT_DOM_UPDATE
+    is_lead_graph: bool = False  # True when this session's graph is the P3 lead graph (opt-in)
 
 
 class SessionManager:
@@ -54,7 +57,8 @@ class SessionManager:
 
         session_id = str(uuid.uuid4())[:8]
         thread_id = f"ws_{session_id}_{int(time.time())}"
-        graph = create_agent_graph()
+        use_lead_graph = settings.use_lead_graph
+        graph = build_lead_graph() if use_lead_graph else create_agent_graph()
         now = time.time()
 
         session = Session(
@@ -63,6 +67,7 @@ class SessionManager:
             graph=graph,
             created_at=now,
             last_activity=now,
+            is_lead_graph=use_lead_graph,
         )
         self._sessions[session_id] = session
         logger.info("session_created", session_id=session_id, thread_id=thread_id)

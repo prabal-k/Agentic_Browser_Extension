@@ -360,13 +360,23 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
             logger.debug("no_prior_state", reason=str(e)[:50])
 
     # Create initial state with prior conversation context
-    initial_state = create_initial_state(
-        goal_text=goal,
-        page_context=page_context,
-        model_name=model_name,
-        api_keys=api_keys,
-        prior_messages=prior_messages,
-    )
+    if getattr(session, "is_lead_graph", False):
+        from agent_core.schemas.orchestrator_state import create_lead_state
+        initial_state = create_lead_state(
+            goal_text=goal,
+            model_name=model_name,
+            api_keys=api_keys,
+            prior_messages=prior_messages,
+            page_context=page_context,
+        )
+    else:
+        initial_state = create_initial_state(
+            goal_text=goal,
+            page_context=page_context,
+            model_name=model_name,
+            api_keys=api_keys,
+            prior_messages=prior_messages,
+        )
     # Create streaming callback to push LLM tokens to WebSocket in real-time
     streaming_handler = WebSocketStreamingHandler(ws, session.session_id)
 
@@ -463,6 +473,31 @@ async def _stream_node_output(
 ) -> None:
     """Convert a graph node's output into WebSocket messages for the client."""
     sid = session.session_id
+
+    # --- lead graph nodes (P3, opt-in via settings.use_lead_graph) ---
+    if node_name == "seed_plan" and "plan" in output:
+        plan = output["plan"]
+        await send_msg(ws, "server_plan",
+                       steps=[
+                           {"description": getattr(p, "subgoal", ""),
+                            "status": getattr(p.status, "value", str(getattr(p, "status", "")))}
+                           for p in plan
+                       ],
+                       session_id=sid)
+        return
+    if node_name == "plan_step" and "lead_decision" in output:
+        dec = output["lead_decision"]
+        await send_msg(ws, "server_status",
+                       status=f"lead: {dec.get('action', '')}",
+                       session_id=sid)
+        return
+    if node_name == "integrate" and "plan" in output:
+        plan = output["plan"]
+        done = sum(1 for p in plan if getattr(p.status, "value", p.status) == "done")
+        await send_msg(ws, "server_status",
+                       status=f"progress: {done}/{len(plan)} subgoals done",
+                       session_id=sid)
+        return
 
     # Status updates with descriptive messages
     if "cognitive_status" in output:
@@ -745,8 +780,11 @@ async def _handle_interrupt(
                         import httpx
                         vision_model = settings.vision_model
                         if vision_model:
+                            from agent_core.playwright.action_executor import downscale_image_b64
                             # Extract base64 from data URL
                             img_b64 = extracted.split(",", 1)[1] if "," in extracted else extracted
+                            # Shrink large screenshots — fewer vision tokens, faster, timeout-safe
+                            img_b64 = downscale_image_b64(img_b64)
                             # Get the vision query from the action result message
                             action_msg = result.get("message", "")
                             vision_query = "Analyze this screenshot and describe what you see."
@@ -758,8 +796,10 @@ async def _handle_interrupt(
                                 "model": vision_model,
                                 "messages": [{"role": "user", "content": f"Task: {vision_query}\n\nLook at this screenshot and answer the task. Be specific and factual about what you see.", "images": [img_b64]}],
                                 "stream": False,
+                                "think": False,  # skip qwen3-vl <think> dump — wastes latency + tokens
+                                "options": {"num_predict": 300},  # one-line answer needs no more
                             }
-                            async with httpx.AsyncClient(timeout=120.0) as hc:
+                            async with httpx.AsyncClient(timeout=90.0) as hc:
                                 vr = await hc.post(f"{settings.ollama_base_url}/api/chat", json=payload)
                                 vr.raise_for_status()
                                 vdata = vr.json()
@@ -767,9 +807,19 @@ async def _handle_interrupt(
                             response["extracted_data"] = vision_text[:3000] if vision_text else "Vision returned empty"
                             logger.info("vision_analysis_from_extension", result_length=len(response["extracted_data"]))
                     except Exception as ve:
-                        logger.error("vision_analysis_error", error=str(ve))
+                        # Many httpx errors (ReadTimeout, ConnectError) stringify to "",
+                        # so include the exception type — otherwise the cause is invisible.
+                        import httpx as _httpx
+                        if isinstance(ve, _httpx.HTTPStatusError) and ve.response is not None:
+                            detail = f"HTTP {ve.response.status_code}: {ve.response.text[:200]}"
+                        else:
+                            detail = f"{type(ve).__name__}: {ve}".rstrip(": ")
+                        logger.error("vision_analysis_error", error=detail,
+                                     exc_type=type(ve).__name__,
+                                     vision_model=vision_model,
+                                     base_url=settings.ollama_base_url)
                         # Don't silently fail — put the error in extracted_data so the agent knows
-                        response["extracted_data"] = f"Vision analysis failed: {str(ve)[:300]}"
+                        response["extracted_data"] = f"Vision analysis failed: {detail[:300]}"
 
                 if new_dom:
                     response["new_dom"] = new_dom

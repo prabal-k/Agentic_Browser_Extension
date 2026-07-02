@@ -105,6 +105,16 @@ class Settings(BaseSettings):
             "JS in any tab the user opens."
         ),
     )
+    use_lead_graph: bool = Field(
+        default=False,
+        description=(
+            "Opt-in orchestrator-worker lead graph (P3): sessions build "
+            "seed_plan -> plan_step -> worker -> integrate instead of the "
+            "classic ReAct agent graph. Disabled by default — zero change to "
+            "the shipped agent until P4 flips the default and removes the old "
+            "path."
+        ),
+    )
 
     # Server configuration
     server_host: str = Field(default="0.0.0.0")
