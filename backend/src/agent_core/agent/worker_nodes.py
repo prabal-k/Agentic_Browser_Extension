@@ -211,6 +211,13 @@ async def worker_decide(state: WorkerState) -> dict:
         }
 
     action = _build_worker_action(name, args)
+    # Safety gate. TODAY this reduces to is_destructive (enum-level: upload_file,
+    # evaluate_js, handle_dialog) because _build_worker_action assigns every worker
+    # action risk_level="low"/requires_confirmation=False. The requires_confirmation
+    # / risk_level clauses are the MECHANISM for intent-level gating (place order,
+    # pay) — they fire only once _build_worker_action assigns real risk, which it
+    # does NOT yet. So payment/credential intents are NOT gated here today; that is
+    # tracked follow-up work needing semantic classification.
     if action is not None and (
         is_destructive(action.action_type)
         or action.requires_confirmation

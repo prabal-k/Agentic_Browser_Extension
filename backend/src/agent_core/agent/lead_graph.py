@@ -37,22 +37,30 @@ def _lead_serde():
     with strict msgpack. Dynamic (grabs every class defined in the schemas
     package) so no type is missed; langchain message types stay covered by
     LangGraph's own safe-type registry.
+
+    Returns None (→ MemorySaver's default serde) on any older LangGraph that
+    lacks the allowed_msgpack_modules kwarg — checkpointing still works, the
+    msgpack warnings just return. Keeps us portable under the loose langgraph pin.
     """
     import importlib
     import inspect
     import pkgutil
 
-    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    try:
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-    import agent_core.schemas as _schemas
+        import agent_core.schemas as _schemas
 
-    allow: list[type] = []
-    for mod_info in pkgutil.iter_modules(_schemas.__path__, _schemas.__name__ + "."):
-        mod = importlib.import_module(mod_info.name)
-        for _, obj in inspect.getmembers(mod, inspect.isclass):
-            if getattr(obj, "__module__", "") == mod_info.name:
-                allow.append(obj)
-    return JsonPlusSerializer(allowed_msgpack_modules=allow)
+        allow: list[type] = []
+        for mod_info in pkgutil.iter_modules(_schemas.__path__, _schemas.__name__ + "."):
+            mod = importlib.import_module(mod_info.name)
+            for _, obj in inspect.getmembers(mod, inspect.isclass):
+                if getattr(obj, "__module__", "") == mod_info.name:
+                    allow.append(obj)
+        return JsonPlusSerializer(allowed_msgpack_modules=allow)
+    except (ImportError, TypeError) as exc:  # older/newer langgraph without the kwarg
+        logger.warning("lead_serde_allowlist_unsupported", error=str(exc)[:120])
+        return None
 
 
 # Schema classes never change at runtime — build the allowlisted serde once.
