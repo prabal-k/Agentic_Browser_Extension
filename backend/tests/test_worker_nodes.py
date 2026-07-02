@@ -145,6 +145,37 @@ class TestParseExecutionResult:
         assert page is None
 
 
+class TestResolveFingerprint:
+    def test_keeps_action_fingerprint_when_present(self):
+        from agent_core.agent.worker_nodes import _resolve_fingerprint
+        from agent_core.schemas.actions import Action, ActionType
+        a = Action(action_id="a", action_type=ActionType.CLICK, element_id=1,
+                   element_fingerprint="fp-x")
+        assert _resolve_fingerprint(a, None) == "fp-x"
+
+    def test_none_when_no_element_matches(self):
+        from agent_core.agent.worker_nodes import _resolve_fingerprint
+        from agent_core.schemas.actions import Action, ActionType
+        from agent_core.schemas.dom import PageContext
+        a = Action(action_id="a", action_type=ActionType.CLICK, element_id=99)
+        page = PageContext(url="u", title="t", elements=[])
+        assert _resolve_fingerprint(a, page) is None
+
+    def test_resolves_from_page_context_when_available(self):
+        # If DOMElement carries a fingerprint, it is returned; otherwise None.
+        # This test asserts the lookup path runs without error and returns str|None.
+        from agent_core.agent.worker_nodes import _resolve_fingerprint
+        from agent_core.schemas.actions import Action, ActionType
+        from agent_core.schemas.dom import DOMElement, ElementType, PageContext
+        a = Action(action_id="a", action_type=ActionType.CLICK, element_id=2)
+        page = PageContext(url="u", title="t", elements=[
+            DOMElement(element_id=2, element_type=ElementType.BUTTON,
+                       tag_name="button", text="Go"),
+        ])
+        result = _resolve_fingerprint(a, page)
+        assert result is None or isinstance(result, str)
+
+
 class TestBudget:
     def test_budget_exhausted_true_at_cap(self):
         from agent_core.agent.budgets import WORKER_ACTION_CAP

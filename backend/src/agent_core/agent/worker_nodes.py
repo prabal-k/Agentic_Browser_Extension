@@ -186,6 +186,25 @@ async def worker_decide(state: WorkerState) -> dict:
     return {"current_action": action, "messages": [response]}
 
 
+def _resolve_fingerprint(action, page_context) -> str | None:
+    """Resolve an element's stable fingerprint for stale-id recovery.
+
+    Mirrors execute_action_node (graph.py): if the action carries no fingerprint,
+    look it up from page_context by element_id so the browser can recover when a
+    numeric element_id goes stale between decide and execute.
+    """
+    element_fingerprint = action.element_fingerprint
+    if element_fingerprint is None and action.element_id is not None:
+        if page_context and hasattr(page_context, "elements"):
+            for el in page_context.elements:
+                if getattr(el, "element_id", None) == action.element_id:
+                    fp = getattr(el, "fingerprint", "")
+                    if fp:
+                        element_fingerprint = fp
+                    break
+    return element_fingerprint
+
+
 def _parse_execution_result(
     action, execution_result: dict
 ) -> tuple[ActionResult, PageContext | None]:
@@ -224,7 +243,7 @@ async def worker_execute(state: WorkerState) -> dict:
         "action_id": action.action_id,
         "action_type": action.action_type.value,
         "element_id": action.element_id,
-        "element_fingerprint": action.element_fingerprint,
+        "element_fingerprint": _resolve_fingerprint(action, state.get("page_context")),
         "value": action.value,
         "description": action.description,
     }
