@@ -192,3 +192,57 @@ class TestBudget:
         d = _digest_budget_exhausted({"actions_used": 8})
         assert d.status == "failed"
         assert d.actions_used == 8
+
+
+class TestObservationChannel:
+    @pytest.mark.asyncio
+    async def test_prior_extracted_data_reaches_the_prompt(self):
+        # After a read whose result was "$38", the NEXT decide turn's human
+        # message must contain "$38" — proving the observation channel works.
+        from agent_core.agent.worker_nodes import worker_decide
+        state = create_worker_state(
+            role=WorkerRole.EXTRACTOR, subgoal="get price",
+            done_criteria="captured", model_name="gpt-4o-mini",
+        )
+        state["action_history"] = [{
+            "action": {"action_type": "extract_text", "description": "read price"},
+            "result": {"status": "success", "extracted_data": "$38"},
+        }]
+        finish = MagicMock()
+        finish.tool_calls = [{"name": "finish_subgoal",
+                              "args": {"summary": "ok", "data": {"price": "$38"}}, "id": "t"}]
+        finish.content = ""
+        with patch("agent_core.agent.worker_nodes.get_worker_llm") as gw:
+            llm = AsyncMock()
+            llm.ainvoke.return_value = finish
+            gw.return_value = llm
+            await worker_decide(state)
+            # inspect the human message actually sent to the LLM
+            sent = llm.ainvoke.call_args.args[0]
+            human_text = " ".join(getattr(m, "content", "") for m in sent)
+        assert "$38" in human_text
+
+
+class TestBoundaryGuards:
+    def test_parse_non_dict_result_is_failed(self):
+        from agent_core.agent.worker_nodes import _parse_execution_result
+        from agent_core.schemas.actions import Action, ActionStatus, ActionType
+        a = Action(action_id="a", action_type=ActionType.CLICK, element_id=1)
+        result, page = _parse_execution_result(a, None)
+        assert result.status == ActionStatus.FAILED
+        assert page is None
+
+    def test_finish_wraps_non_dict_data(self):
+        from agent_core.agent.worker_nodes import _digest_from_finish
+        d = _digest_from_finish({"summary": "ok", "data": "not-a-dict"}, actions_used=1)
+        assert d.data == {"value": "not-a-dict"}
+
+    def test_float_element_id_coerced_to_int(self):
+        from agent_core.agent.worker_nodes import _build_worker_action
+        a = _build_worker_action("click", {"element_id": 7.0})
+        assert a.element_id == 7
+
+    def test_bool_element_id_is_none(self):
+        from agent_core.agent.worker_nodes import _build_worker_action
+        a = _build_worker_action("click", {"element_id": True})
+        assert a.element_id is None

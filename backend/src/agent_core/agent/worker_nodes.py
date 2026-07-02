@@ -78,11 +78,13 @@ def _build_worker_action(tool_name: str, args: dict) -> Action | None:
                 break
 
     raw_eid = args.get("element_id")
-    element_id = (
-        int(raw_eid)
-        if isinstance(raw_eid, (int, str)) and str(raw_eid).isdigit()
-        else None
-    )
+    element_id = None
+    if isinstance(raw_eid, bool):
+        element_id = None
+    elif isinstance(raw_eid, (int, float)):
+        element_id = int(raw_eid)
+    elif isinstance(raw_eid, str) and raw_eid.strip().isdigit():
+        element_id = int(raw_eid)
 
     return Action(
         action_id=f"act_{uuid.uuid4().hex[:8]}",
@@ -96,10 +98,13 @@ def _build_worker_action(tool_name: str, args: dict) -> Action | None:
 
 def _digest_from_finish(args: dict, actions_used: int) -> ResultDigest:
     """Build the terminal ResultDigest from a finish_subgoal tool call."""
+    data = args.get("data")
+    if data is not None and not isinstance(data, dict):
+        data = {"value": data}
     return ResultDigest(
         status="done",
         summary=args.get("summary", ""),
-        data=args.get("data"),
+        data=data,
         actions_used=actions_used,
     )
 
@@ -130,6 +135,26 @@ def _page_summary(page_context: PageContext | None) -> str:
     return "\n".join(lines)
 
 
+def _format_observations(action_history: list, limit: int = 5) -> str:
+    """Render recent action results (incl. extracted_data) so the LLM can see
+    what its tools returned — read/see/extract results arrive as extracted_data,
+    not as a new page, so without this the worker is blind to what it read."""
+    if not action_history:
+        return "No actions taken yet."
+    lines = []
+    for entry in action_history[-limit:]:
+        act = entry.get("action", {})
+        res = entry.get("result", {})
+        desc = act.get("description") or act.get("action_type") or "action"
+        status = res.get("status", "?")
+        line = f"- {desc} -> {status}"
+        data = res.get("extracted_data")
+        if data:
+            line += f"; result: {str(data)[:800]}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 async def worker_decide(state: WorkerState) -> dict:
     """One role-scoped LLM call → the next Action, or a terminal digest."""
     llm = get_worker_llm(
@@ -140,10 +165,11 @@ async def worker_decide(state: WorkerState) -> dict:
     system = _WORKER_SYSTEM.format(
         subgoal=state["subgoal"], done_criteria=state["done_criteria"],
     )
-    history_note = ""
-    if state.get("action_history"):
-        history_note = f"\n\nActions so far: {len(state['action_history'])}."
-    human = f"{_page_summary(state.get('page_context'))}{history_note}"
+    human = (
+        f"{_page_summary(state.get('page_context'))}\n\n"
+        f"Observations from your actions so far:\n"
+        f"{_format_observations(state.get('action_history', []))}"
+    )
 
     response = await llm.ainvoke([
         SystemMessage(content=system),
@@ -183,7 +209,7 @@ async def worker_decide(state: WorkerState) -> dict:
             ),
         }
 
-    return {"current_action": action, "messages": [response]}
+    return {"current_action": action}
 
 
 def _resolve_fingerprint(action, page_context) -> str | None:
@@ -212,6 +238,15 @@ def _parse_execution_result(
 
     Mirrors execute_action_node (graph.py) so the browser side is unchanged.
     """
+    if not isinstance(execution_result, dict):
+        return (
+            ActionResult(
+                action_id=action.action_id,
+                status=ActionStatus.FAILED,
+                message="invalid execution result (not a dict)",
+            ),
+            None,
+        )
     result = ActionResult(
         action_id=action.action_id,
         status=ActionStatus(execution_result.get("status", "failed")),
