@@ -67,11 +67,18 @@ class TestLeadGraph:
             rl = AsyncMock()
             rl.ainvoke.return_value = _reasoning(seed_json)
             gr.return_value = rl
+            def worker_llm_side_effect(messages, *args, **kwargs):
+                human = ""
+                for m in messages:
+                    if m.__class__.__name__ == "HumanMessage":
+                        human = m.content
+                # Only finish AFTER an action result is visible (proves worker_execute ran).
+                if "No actions taken yet" in human:
+                    return _tool("navigate", {"url": "https://x.com"})
+                return _tool("finish_subgoal", {"summary": "opened"})
+
             wl = AsyncMock()
-            wl.ainvoke.side_effect = [
-                _tool("navigate", {"url": "https://x.com"}),
-                _tool("finish_subgoal", {"summary": "opened"}),
-            ]
+            wl.ainvoke.side_effect = worker_llm_side_effect
             gw.return_value = wl
             interim = await graph.ainvoke(state, CFG)
             assert "__interrupt__" in interim
@@ -80,3 +87,6 @@ class TestLeadGraph:
                 CFG,
             )
         assert any(i.status.value == "done" for i in out["plan"])
+        # A single resume must be enough to finish: proves worker_execute consumed
+        # the resume and the next worker_decide observed its result (not paused again).
+        assert "__interrupt__" not in out
