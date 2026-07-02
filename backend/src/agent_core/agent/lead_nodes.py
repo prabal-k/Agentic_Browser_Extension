@@ -8,16 +8,19 @@ The lead has NO browser tools; only the compact ResultDigest informs the ledger.
 """
 
 import uuid
+from typing import Literal
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.types import interrupt
 
-from agent_core.agent.budgets import LEAD_DELEGATION_CAP
+from agent_core.agent.budgets import ITEM_RETRY_CAP, LEAD_DELEGATION_CAP
 from agent_core.agent.llm_client import get_reasoning_llm
 from agent_core.agent.nodes import _parse_llm_json
 from agent_core.schemas.orchestrator import (
     PlanItem,
     PlanItemStatus,
+    ResultDigest,
     WorkerRole,
 )
 from agent_core.schemas.orchestrator_state import LeadState
@@ -134,3 +137,74 @@ def plan_step(state: LeadState) -> dict:
     # pending items remain but none are ready (unmet deps / blocked) → stop
     return {"lead_decision": {"action": "finish", "reason": "no ready items (blocked)"},
             "active_item_id": None, "plan": plan}
+
+
+def integrate(state: LeadState) -> dict:
+    """Fold the worker's ResultDigest into the active item; 0-LLM."""
+    plan = list(state.get("plan", []))
+    tabs = dict(state.get("tabs", {}))
+    delegations = state.get("delegations_used", 0) + 1
+    decision = dict(state.get("lead_decision", {}))
+    digest: ResultDigest | None = decision.get("digest")
+
+    item = None
+    active_id = state.get("active_item_id")
+    for i in plan:
+        if i.id == active_id:
+            item = i
+            break
+
+    if item is None or digest is None:
+        return {"plan": plan, "tabs": tabs, "delegations_used": delegations}
+
+    if digest.tab_id:
+        tabs[digest.tab_id] = digest.summary[:60] or digest.tab_id
+
+    if digest.status == "done":
+        item.status = PlanItemStatus.DONE
+        item.result_digest = digest.summary
+        item.data = digest.data
+    elif digest.status == "needs_user":
+        # leave the item ACTIVE; route to ask_user
+        decision = {"action": "ask_user", "question": digest.question or "Please confirm."}
+        return {"plan": plan, "tabs": tabs, "delegations_used": delegations,
+                "lead_decision": decision}
+    else:  # failed
+        if item.retries < ITEM_RETRY_CAP:
+            item.retries += 1
+            item.status = PlanItemStatus.PENDING  # retry
+        else:
+            item.status = PlanItemStatus.FAILED
+
+    return {"plan": plan, "tabs": tabs, "delegations_used": delegations}
+
+
+async def ask_user_node(state: LeadState) -> dict:
+    """Bubble a worker escalation to the human (single HITL choke point)."""
+    decision = state.get("lead_decision", {})
+    question = decision.get("question", "The agent needs your input.")
+    answer = interrupt({"question": question})
+    # normalize the resume shape ({"answer": ...} per ws_handler) to text
+    text = answer.get("answer", "") if isinstance(answer, dict) else str(answer)
+    plan = list(state.get("plan", []))
+    for i in plan:
+        if i.id == state.get("active_item_id"):
+            i.status = PlanItemStatus.PENDING  # re-attempt with the new info
+            break
+    return {"messages": [HumanMessage(content=text)], "plan": plan,
+            "lead_decision": {"action": "resumed"}}
+
+
+def route_after_plan_step(state: LeadState) -> Literal["worker", "ask_user_node", "__end__"]:
+    action = state.get("lead_decision", {}).get("action")
+    if action == "delegate":
+        return "worker"
+    if action == "ask_user":
+        return "ask_user_node"
+    return "__end__"
+
+
+def route_after_integrate(state: LeadState) -> Literal["plan_step", "ask_user_node"]:
+    if state.get("lead_decision", {}).get("action") == "ask_user":
+        return "ask_user_node"
+    return "plan_step"

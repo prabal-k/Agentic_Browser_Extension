@@ -49,6 +49,7 @@ class PlanItem(BaseModel):
     result_digest: str = ""
     # structured values the worker extracted (e.g. prices), folded from ResultDigest.data
     data: dict | None = None
+    retries: int = 0  # times this item was re-delegated after a failed digest
 
 
 class ResultDigest(BaseModel):

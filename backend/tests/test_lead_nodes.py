@@ -140,3 +140,78 @@ class TestPlanStep:
         ready = _next_ready(plan)
         assert ready is not None
         assert ready.id == "b"
+
+
+class TestIntegrate:
+    def _state_with_active(self, digest):
+        from agent_core.schemas.orchestrator import PlanItem, PlanItemStatus, WorkerRole
+        state = create_lead_state("g", "gpt-4o-mini")
+        item = PlanItem(id="a", subgoal="s", role=WorkerRole.EXTRACTOR,
+                        done_criteria="d", status=PlanItemStatus.ACTIVE)
+        state["plan"] = [item]
+        state["active_item_id"] = "a"
+        state["lead_decision"] = {"action": "delegate", "item_id": "a", "digest": digest}
+        return state
+
+    def test_done_digest_marks_item_done(self):
+        from agent_core.agent.lead_nodes import integrate
+        from agent_core.schemas.orchestrator import PlanItemStatus, ResultDigest
+        digest = ResultDigest(status="done", summary="got it", data={"p": "$1"}, actions_used=3)
+        out = integrate(self._state_with_active(digest))
+        item = out["plan"][0]
+        assert item.status is PlanItemStatus.DONE
+        assert item.result_digest == "got it"
+        assert item.data == {"p": "$1"}
+        assert out["delegations_used"] == 1
+
+    def test_failed_digest_retries_then_fails(self):
+        from agent_core.agent.lead_nodes import integrate
+        from agent_core.schemas.orchestrator import PlanItemStatus, ResultDigest
+        digest = ResultDigest(status="failed", summary="nope", actions_used=8)
+        # first failure → back to PENDING (retry)
+        s = self._state_with_active(digest)
+        out = integrate(s)
+        assert out["plan"][0].status is PlanItemStatus.PENDING
+        assert out["plan"][0].retries == 1
+        # exhaust retries
+        out["plan"][0].status = PlanItemStatus.ACTIVE
+        s2 = create_lead_state("g", "gpt-4o-mini")
+        s2["plan"] = out["plan"]
+        s2["active_item_id"] = "a"
+        s2["lead_decision"] = {"digest": digest}
+        out["plan"][0].retries = 2  # at cap
+        out2 = integrate(s2)
+        assert out2["plan"][0].status is PlanItemStatus.FAILED
+
+    def test_needs_user_routes_to_ask(self):
+        from agent_core.agent.lead_nodes import integrate, route_after_integrate
+        from agent_core.schemas.orchestrator import ResultDigest
+        digest = ResultDigest(status="needs_user", summary="confirm?",
+                              needs_user=True, question="Delete account?")
+        out = integrate(self._state_with_active(digest))
+        assert out["lead_decision"]["action"] == "ask_user"
+        # route helper sees the updated decision
+        st = create_lead_state("g", "gpt-4o-mini")
+        st["lead_decision"] = out["lead_decision"]
+        assert route_after_integrate(st) == "ask_user_node"
+
+    def test_records_tab(self):
+        from agent_core.agent.lead_nodes import integrate
+        from agent_core.schemas.orchestrator import ResultDigest
+        digest = ResultDigest(status="done", summary="ok", tab_id="tab_b")
+        out = integrate(self._state_with_active(digest))
+        assert out["tabs"]["tab_b"]
+
+
+class TestLeadRouting:
+    def test_route_after_plan_step_delegate(self):
+        from agent_core.agent.lead_nodes import route_after_plan_step
+        st = create_lead_state("g", "gpt-4o-mini")
+        st["lead_decision"] = {"action": "delegate", "item_id": "a"}
+        assert route_after_plan_step(st) == "worker"
+
+    def test_route_after_plan_step_finish(self):
+        from agent_core.agent.lead_nodes import route_after_plan_step
+        st = create_lead_state("g", "gpt-4o-mini")
+        st["lead_decision"] = {"action": "finish"}
+        assert route_after_plan_step(st) == "__end__"
