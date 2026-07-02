@@ -90,3 +90,45 @@ class TestLeadGraph:
         # A single resume must be enough to finish: proves worker_execute consumed
         # the resume and the next worker_decide observed its result (not paused again).
         assert "__interrupt__" not in out
+
+
+class TestLeadSerdeRoundtrip:
+    def test_checkpointed_types_survive_roundtrip(self):
+        # The serde's key risk: an explicit allowlist BLOCKS non-listed types,
+        # degrading them to raw dicts (silent, surfaces as AttributeError on
+        # resume). Assert every type actually stored in Lead/Worker state
+        # round-trips as its real class, so a future schema addition fails loudly.
+        from langchain_core.messages import HumanMessage
+
+        from agent_core.agent.lead_graph import _lead_serde
+        from agent_core.schemas.actions import (
+            Action,
+            ActionResult,
+            ActionStatus,
+            ActionType,
+        )
+        from agent_core.schemas.dom import DOMElement, ElementType, PageContext
+        from agent_core.schemas.orchestrator import (
+            PlanItem,
+            PlanItemStatus,
+            ResultDigest,
+            WorkerRole,
+        )
+        serde = _lead_serde()
+        samples = [
+            PlanItem(id="a", subgoal="s", role=WorkerRole.EXTRACTOR, done_criteria="d"),
+            ResultDigest(status="done", summary="ok", data={"p": 1}),
+            WorkerRole.AUTH,
+            PlanItemStatus.DONE,
+            PageContext(url="u", title="t", elements=[
+                DOMElement(element_id=1, element_type=ElementType.BUTTON,
+                           tag_name="button", text="Go"),
+            ]),
+            Action(action_id="x", action_type=ActionType.CLICK, element_id=1),
+            ActionResult(action_id="x", status=ActionStatus.SUCCESS, message="ok"),
+            HumanMessage(content="hi"),
+        ]
+        for obj in samples:
+            restored = serde.loads_typed(serde.dumps_typed(obj))
+            assert type(restored) is type(obj), \
+                f"{type(obj).__name__} degraded to {type(restored).__name__}"

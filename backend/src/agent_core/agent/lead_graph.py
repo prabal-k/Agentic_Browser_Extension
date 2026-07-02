@@ -55,6 +55,10 @@ def _lead_serde():
     return JsonPlusSerializer(allowed_msgpack_modules=allow)
 
 
+# Schema classes never change at runtime — build the allowlisted serde once.
+_LEAD_SERDE = _lead_serde()
+
+
 async def worker_node(state: LeadState) -> dict:
     """Delegate the active PlanItem to the worker subgraph; return its digest."""
     item = _active_item(state)
@@ -84,7 +88,7 @@ async def worker_node(state: LeadState) -> dict:
 def build_lead_graph(checkpointer=None):
     """Compile the lead graph. Needs a checkpointer for interrupt/resume."""
     if checkpointer is None:
-        checkpointer = MemorySaver(serde=_lead_serde())
+        checkpointer = MemorySaver(serde=_LEAD_SERDE)
 
     builder = StateGraph(LeadState)
     builder.add_node("seed_plan", seed_plan)
