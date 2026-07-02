@@ -112,16 +112,25 @@ def _digest_from_finish(args: dict, actions_used: int) -> ResultDigest:
     )
 
 
-_WORKER_SYSTEM = """You are a focused browser worker. Do ONE subgoal, then call finish_subgoal.
+_WORKER_SYSTEM = """You are a focused browser worker with ONE subgoal. You work in a LOOP:
+observe the page, take ONE tool action, observe the result, repeat — until the
+done-criteria are ACTUALLY met on the page. Only THEN call finish_subgoal.
 
 Subgoal: {subgoal}
 Done when: {done_criteria}
 
 Rules:
+- One tool action per turn. After it, you get the updated page + the result.
+- Do NOT finish until the Observations below actually show the done-criteria met.
+  A site's HOMEPAGE is usually NOT enough. To reach specific information, navigate
+  DIRECTLY to a URL that contains it. To search the web, navigate to
+  https://www.google.com/search?q=YOUR+QUERY (put + between words), then read the
+  results — do not stop at google.com's homepage.
+- Be honest. Your finish summary and data must reflect ONLY what the Observations
+  actually show. Never claim an action or a result you did not see happen.
+- If you genuinely cannot make progress, call finish_subgoal explaining why (this
+  marks the subgoal failed) — never pretend success.
 - Use only your available tools.
-- Take the single best next action toward the subgoal.
-- The moment the done-criteria are met, call finish_subgoal(summary, data).
-- If you cannot proceed, call finish_subgoal with a summary explaining why.
 """
 
 
@@ -234,6 +243,26 @@ async def worker_decide(state: WorkerState) -> dict:
             ),
         }
 
+    # Anti-loop guard: weaker models sometimes repeat the same action forever
+    # (e.g. re-navigating to the same URL) instead of finishing. If the last two
+    # executed actions are already identical to this one, stop and fail the
+    # subgoal rather than burning the whole action budget looping.
+    sig = (action.action_type.value, action.value)
+    recent = [
+        (e.get("action", {}).get("action_type"), e.get("action", {}).get("value"))
+        for e in state.get("action_history", [])[-2:]
+    ]
+    if len(recent) == 2 and all(r == sig for r in recent):
+        return {
+            "finished": True,
+            "result_digest": ResultDigest(
+                status="failed",
+                summary=f"stuck: repeated the same action "
+                        f"({action.action_type.value}) with no progress",
+                actions_used=state.get("actions_used", 0),
+            ),
+        }
+
     return {"current_action": action}
 
 
@@ -313,7 +342,8 @@ async def worker_execute(state: WorkerState) -> dict:
 
     history = list(state.get("action_history", []))
     history.append({
-        "action": {"action_type": action.action_type.value, "description": action.description},
+        "action": {"action_type": action.action_type.value, "value": action.value,
+                   "description": action.description},
         "result": {"status": result.status.value, "extracted_data": result.extracted_data},
     })
 

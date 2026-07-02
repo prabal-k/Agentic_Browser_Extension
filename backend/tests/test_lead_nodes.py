@@ -215,3 +215,16 @@ class TestLeadRouting:
         st = create_lead_state("g", "gpt-4o-mini")
         st["lead_decision"] = {"action": "finish"}
         assert route_after_plan_step(st) == "__end__"
+
+
+class TestLenientJson:
+    def test_parses_prose_wrapped_json(self):
+        from agent_core.agent.lead_nodes import _loads_json_lenient
+        text = ('Sure, here is the plan: {"items": [{"subgoal":"go","role":'
+                '"navigator","done_criteria":"d"}]} Hope this helps!')
+        data = _loads_json_lenient(text)
+        assert data["items"][0]["role"] == "navigator"
+
+    def test_parses_fenced_json(self):
+        from agent_core.agent.lead_nodes import _loads_json_lenient
+        assert _loads_json_lenient('```json\n{"items": []}\n```') == {"items": []}

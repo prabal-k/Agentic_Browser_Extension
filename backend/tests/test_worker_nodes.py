@@ -297,3 +297,30 @@ class TestWorkerDecideRiskGate:
         assert out["finished"] is True
         assert out["result_digest"].status == "needs_user"
         assert out["result_digest"].needs_user is True
+
+
+class TestWorkerAntiLoop:
+    @pytest.mark.asyncio
+    async def test_repeated_action_fails_fast(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from agent_core.agent.worker_nodes import worker_decide
+        from agent_core.schemas.orchestrator import WorkerRole
+        from agent_core.schemas.orchestrator_state import create_worker_state
+        state = create_worker_state(role=WorkerRole.NAVIGATOR, subgoal="go",
+                                    done_criteria="d", model_name="m")
+        state["action_history"] = [
+            {"action": {"action_type": "navigate", "value": "https://x.com"}, "result": {}},
+            {"action": {"action_type": "navigate", "value": "https://x.com"}, "result": {}},
+        ]
+        resp = MagicMock()
+        resp.tool_calls = [{"name": "navigate", "args": {"url": "https://x.com"}, "id": "t"}]
+        resp.content = ""
+        with patch("agent_core.agent.worker_nodes.get_worker_llm") as gw:
+            llm = AsyncMock()
+            llm.ainvoke.return_value = resp
+            gw.return_value = llm
+            out = await worker_decide(state)
+        assert out["finished"] is True
+        assert out["result_digest"].status == "failed"
+        assert "stuck" in out["result_digest"].summary.lower()
