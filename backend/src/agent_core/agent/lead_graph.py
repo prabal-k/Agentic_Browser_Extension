@@ -75,7 +75,19 @@ async def worker_node(state: LeadState) -> dict:
         page_context=state.get("last_page_context"),
         api_keys=state.get("api_keys"),
     )
-    result = await _WORKER.ainvoke(ws)  # runs to completion across browser interrupts
+    # Tag the worker run so LangSmith nests it under the lead run, labelled by
+    # role + item. run_name/metadata/tags merge onto the ambient parent config
+    # (thread_id/checkpoint_ns preserved), so interrupt/resume still works.
+    worker_config = {
+        "run_name": f"worker:{item.role.value}[{item.id}]",
+        "tags": ["worker", item.role.value],
+        "metadata": {
+            "role": item.role.value,
+            "item_id": item.id,
+            "subgoal": item.subgoal[:120],
+        },
+    }
+    result = await _WORKER.ainvoke(ws, config=worker_config)  # completes across browser interrupts
     digest = result.get("result_digest") or ResultDigest(status="failed",
                                                           summary="worker returned no digest")
     out = {"lead_decision": {**state.get("lead_decision", {}), "digest": digest}}

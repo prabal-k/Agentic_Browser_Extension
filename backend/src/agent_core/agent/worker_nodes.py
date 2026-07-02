@@ -93,6 +93,9 @@ def _build_worker_action(tool_name: str, args: dict) -> Action | None:
         value=value,
         description=args.get("description", tool_name),
         risk_level="low",
+        # Worker actions are gated by is_destructive / risk_level in worker_decide,
+        # NOT by the Action model's default requires_confirmation=True.
+        requires_confirmation=False,
     )
 
 
@@ -208,7 +211,11 @@ async def worker_decide(state: WorkerState) -> dict:
         }
 
     action = _build_worker_action(name, args)
-    if action is not None and is_destructive(action.action_type):
+    if action is not None and (
+        is_destructive(action.action_type)
+        or action.requires_confirmation
+        or action.risk_level in ("high", "critical")
+    ):
         return {
             "finished": True,
             "result_digest": ResultDigest(

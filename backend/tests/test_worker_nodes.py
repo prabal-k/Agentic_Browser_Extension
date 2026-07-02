@@ -270,3 +270,30 @@ class TestWorkerDecideLLMErrorGuard:
         assert out["result_digest"].status == "failed"
         assert out["result_digest"].actions_used == 2
         assert "error" in out["result_digest"].summary.lower()
+
+
+class TestWorkerDecideRiskGate:
+    @pytest.mark.asyncio
+    async def test_high_risk_action_bubbles_needs_user(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from agent_core.agent.worker_nodes import worker_decide
+        from agent_core.schemas.actions import Action, ActionType
+        from agent_core.schemas.orchestrator import WorkerRole
+        from agent_core.schemas.orchestrator_state import create_worker_state
+        state = create_worker_state(role=WorkerRole.NAVIGATOR, subgoal="s",
+                                    done_criteria="d", model_name="m")
+        resp = MagicMock()
+        resp.tool_calls = [{"name": "click", "args": {"element_id": 1}, "id": "t"}]
+        resp.content = ""
+        with patch("agent_core.agent.worker_nodes.get_worker_llm") as gw, \
+             patch("agent_core.agent.worker_nodes._build_worker_action") as bwa:
+            llm = AsyncMock()
+            llm.ainvoke.return_value = resp
+            gw.return_value = llm
+            bwa.return_value = Action(action_id="x", action_type=ActionType.CLICK,
+                                      element_id=1, risk_level="high")
+            out = await worker_decide(state)
+        assert out["finished"] is True
+        assert out["result_digest"].status == "needs_user"
+        assert out["result_digest"].needs_user is True

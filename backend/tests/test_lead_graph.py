@@ -132,3 +132,31 @@ class TestLeadSerdeRoundtrip:
             restored = serde.loads_typed(serde.dumps_typed(obj))
             assert type(restored) is type(obj), \
                 f"{type(obj).__name__} degraded to {type(restored).__name__}"
+
+
+class TestWorkerRunTagging:
+    @pytest.mark.asyncio
+    async def test_worker_invocation_is_tagged_for_langsmith(self):
+        from unittest.mock import patch
+
+        from agent_core.agent import lead_graph
+        from agent_core.schemas.orchestrator import PlanItem, ResultDigest, WorkerRole
+        from agent_core.schemas.orchestrator_state import create_lead_state
+        item = PlanItem(id="i1", subgoal="open the page", role=WorkerRole.NAVIGATOR,
+                        done_criteria="loaded")
+        state = create_lead_state("g", "m")
+        state["plan"] = [item]
+        state["active_item_id"] = "i1"
+        captured = {}
+
+        async def fake_ainvoke(ws, config=None):
+            captured["config"] = config
+            return {"result_digest": ResultDigest(status="done", summary="ok")}
+
+        with patch.object(lead_graph._WORKER, "ainvoke", side_effect=fake_ainvoke):
+            await lead_graph.worker_node(state)
+        cfg = captured["config"]
+        assert cfg["run_name"] == "worker:navigator[i1]"
+        assert cfg["metadata"]["role"] == "navigator"
+        assert cfg["metadata"]["item_id"] == "i1"
+        assert "worker" in cfg["tags"] and "navigator" in cfg["tags"]
