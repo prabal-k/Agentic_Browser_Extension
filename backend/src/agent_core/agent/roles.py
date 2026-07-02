@@ -11,7 +11,10 @@ consolidated `read`/`see`). Keeping names as data lets P1 test the shape
 without importing the tool layer.
 """
 
+from langchain_core.tools import BaseTool
+
 from agent_core.schemas.orchestrator import WorkerRole
+from agent_core.tools.consolidated_tools import WORKER_TOOL_OBJECTS
 
 MAX_TOOLS_PER_ROLE: int = 8
 
@@ -43,3 +46,22 @@ LEAD_TOOL_NAMES: list[str] = ["delegate", "update_plan", "ask_user", "finish"]
 def tools_for_role(role: WorkerRole) -> list[str]:
     """Return the tool-name menu for a role."""
     return ROLE_TOOL_NAMES[role]
+
+
+def resolve_role_tools(role: WorkerRole) -> list[BaseTool]:
+    """Resolve a role's tool NAMES to their @tool objects.
+
+    Raises KeyError (with the offending name) if a role references a tool name
+    that has no registered object — this is the drift guard: a typo in
+    ROLE_TOOL_NAMES fails loudly instead of silently binding nothing.
+    """
+    resolved: list[BaseTool] = []
+    for name in ROLE_TOOL_NAMES[role]:
+        try:
+            resolved.append(WORKER_TOOL_OBJECTS[name])
+        except KeyError as exc:
+            raise KeyError(
+                f"role {role.value!r} references tool {name!r} with no object "
+                f"in WORKER_TOOL_OBJECTS"
+            ) from exc
+    return resolved

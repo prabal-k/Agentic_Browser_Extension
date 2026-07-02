@@ -314,3 +314,32 @@ def get_action_llm_dynamic(
         api_keys=api_keys,
         max_tokens=512,  # Action decisions need only tool call + short reasoning
     ).bind_tools(tools)
+
+
+def get_worker_llm(
+    role,
+    model_name: str,
+    api_keys: dict | None = None,
+) -> BaseChatModel:
+    """LLM bound to exactly one worker role's tool menu.
+
+    Replaces get_action_llm_dynamic's keyword-guessing tool selection: the role
+    (chosen by the lead at delegate-time) determines the tools deterministically.
+
+    Args:
+        role: a WorkerRole member.
+        model_name: the model to use.
+        api_keys: optional runtime keys (KeyVault).
+    """
+    # Local import avoids a module-load cycle (roles imports tools; llm_client
+    # imports browser_tools). Import here, at call time.
+    from agent_core.agent.roles import resolve_role_tools
+
+    tools = resolve_role_tools(role)
+    return get_llm(
+        model_name=model_name,
+        temperature=0.1,
+        bind_tools=False,
+        api_keys=api_keys,
+        max_tokens=512,
+    ).bind_tools(tools)
