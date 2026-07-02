@@ -39,6 +39,20 @@ class TestPlanItem:
         assert restored == item
         assert restored.role is WorkerRole.AUTH
 
+    def test_carries_structured_data(self):
+        item = PlanItem(
+            id="i3", subgoal="read price", role=WorkerRole.EXTRACTOR,
+            done_criteria="price captured", data={"price": "$38"},
+        )
+        restored = PlanItem.model_validate_json(item.model_dump_json())
+        assert restored.data == {"price": "$38"}
+
+    def test_data_defaults_to_none(self):
+        item = PlanItem(
+            id="i4", subgoal="go", role=WorkerRole.NAVIGATOR, done_criteria="there",
+        )
+        assert item.data is None
+
 
 class TestResultDigest:
     def test_minimal_done_digest(self):

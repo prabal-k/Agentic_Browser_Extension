@@ -6,13 +6,15 @@ noisy fields (page_context, action_history) live ONLY in WorkerState and never
 enter LeadState — that is the context-isolation invariant.
 """
 
-from typing import TypedDict
+from typing import Annotated, TypedDict
+
+from langgraph.graph.message import add_messages
 
 from agent_core.schemas.dom import PageContext
 from agent_core.schemas.orchestrator import PlanItem, ResultDigest, WorkerRole
 
 
-class LeadState(TypedDict):
+class LeadState(TypedDict, total=False):
     """Coordinator state. No browser tools, no DOM, no action history."""
 
     original_goal: str
@@ -24,10 +26,10 @@ class LeadState(TypedDict):
     stored_credentials: dict        # SECURITY: tracked separately (see spec §6)
     model_name: str
     api_keys: dict | None
-    messages: list                  # lead's own short history
+    messages: Annotated[list, add_messages]   # append-semantics: matches AgentState convention
 
 
-class WorkerState(TypedDict):
+class WorkerState(TypedDict, total=False):
     """Ephemeral per-subgoal state. Discarded after result_digest is produced."""
 
     role: WorkerRole

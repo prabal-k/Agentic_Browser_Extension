@@ -1,7 +1,12 @@
 """Tests for the split lead/worker state and their factories."""
 
+import typing
+
+from langgraph.graph.message import add_messages
+
 from agent_core.schemas.orchestrator import PlanItem, WorkerRole
 from agent_core.schemas.orchestrator_state import (
+    LeadState,
     create_lead_state,
     create_worker_state,
 )
@@ -52,3 +57,10 @@ class TestCreateWorkerState:
         )
         assert s["page_context"] is None
         assert s["action_history"] == []
+
+
+class TestLeadMessagesReducer:
+    def test_messages_uses_add_messages_reducer(self):
+        hints = typing.get_type_hints(LeadState, include_extras=True)
+        meta = getattr(hints["messages"], "__metadata__", ())
+        assert add_messages in meta

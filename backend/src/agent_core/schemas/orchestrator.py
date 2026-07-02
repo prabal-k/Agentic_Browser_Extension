@@ -47,6 +47,8 @@ class PlanItem(BaseModel):
     status: PlanItemStatus = PlanItemStatus.PENDING
     depends_on: list[str] = Field(default_factory=list)
     result_digest: str = ""
+    # structured values the worker extracted (e.g. prices), folded from ResultDigest.data
+    data: dict | None = None
 
 
 class ResultDigest(BaseModel):

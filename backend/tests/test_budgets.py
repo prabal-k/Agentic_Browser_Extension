@@ -28,3 +28,6 @@ class TestDestructiveGate:
 
     def test_evaluate_js_is_destructive(self):
         assert is_destructive(ActionType.EVALUATE_JS) is True
+
+    def test_handle_dialog_is_destructive(self):
+        assert is_destructive(ActionType.HANDLE_DIALOG) is True
