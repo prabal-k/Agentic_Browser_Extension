@@ -853,8 +853,92 @@ async def _handle_interrupt(
         return None
 
 
+async def _send_done_lead(ws: WebSocket, session: Session, final_values: dict) -> None:
+    """Final done message for a lead-graph run — computed from the PlanItem ledger."""
+    from agent_core.schemas.orchestrator import PlanItemStatus
+
+    plan = final_values.get("plan") or []
+    total = len(plan)
+    completed = sum(1 for i in plan if i.status == PlanItemStatus.DONE)
+    failed = [i for i in plan if i.status == PlanItemStatus.FAILED]
+    success = bool(plan) and not failed and all(
+        i.status in (PlanItemStatus.DONE, PlanItemStatus.SKIPPED) for i in plan
+    )
+
+    done_summaries = [i.result_digest for i in plan
+                      if i.status == PlanItemStatus.DONE and i.result_digest]
+    if done_summaries:
+        summary = " | ".join(done_summaries[-3:])[:500]
+    elif failed:
+        summary = f"Could not complete: {failed[0].subgoal}"
+    else:
+        summary = "Task completed successfully." if success else "Task could not be completed."
+
+    collected: dict = {}
+    for i in plan:
+        if isinstance(getattr(i, "data", None), dict):
+            collected.update(i.data)
+
+    goal_text = final_values.get("original_goal", "") or getattr(session, "current_goal", "")
+
+    export_info: dict = {}
+    if collected:
+        try:
+            from agent_core.export.store import export_store
+            export_id = export_store.store(
+                session_id=session.session_id,
+                data=[collected],
+                metadata={"goal": goal_text, "source": "lead_ledger"},
+            )
+            export_info = {
+                "export_available": True,
+                "export_id": export_id,
+                "export_formats": ["json", "csv", "xlsx", "pdf"],
+                "export_items": 1,
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.warning("lead_export_failed", error=str(e)[:100])
+
+    try:
+        import time as _time
+
+        from agent_core.memory.store import extract_domain, get_memory
+
+        domain = ""
+        page_ctx = final_values.get("last_page_context")
+        if page_ctx and getattr(page_ctx, "url", ""):
+            domain = extract_domain(page_ctx.url)
+        mem = get_memory()
+        duration = _time.time() - session.created_at if session.created_at else 0
+        mem.save_task(
+            session_id=session.session_id,
+            goal=goal_text,
+            domain=domain,
+            success=success,
+            total_actions=session.action_count,
+            duration_seconds=round(duration, 1),
+            summary=summary[:500],
+            failure_reason="" if success else (failed[0].subgoal if failed else "Task incomplete"),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("lead_memory_save_failed", error=str(e)[:100])
+
+    await send_msg(ws, "server_done",
+                   success=success,
+                   summary=summary,
+                   steps_completed=completed,
+                   steps_total=total,
+                   total_actions=session.action_count,
+                   session_id=session.session_id,
+                   **export_info)
+
+
 async def _send_done(ws: WebSocket, session: Session, final_values: dict) -> None:
     """Send the final done message summarizing the task."""
+    if getattr(session, "is_lead_graph", False):
+        await _send_done_lead(ws, session, final_values)
+        return
+
     status = final_values.get("cognitive_status", CognitiveStatus.FAILED)
     success = status == CognitiveStatus.COMPLETED if isinstance(status, CognitiveStatus) else False
 
