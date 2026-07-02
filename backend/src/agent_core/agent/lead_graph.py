@@ -29,6 +29,32 @@ logger = structlog.get_logger("agent.lead_graph")
 _WORKER = build_worker_graph(checkpointer=None)
 
 
+def _lead_serde():
+    """JsonPlusSerializer with every agent_core.schemas class allowlisted.
+
+    Silences LangGraph's "Deserializing unregistered type ..." checkpoint
+    warnings for our Pydantic models and keeps checkpointing forward-compatible
+    with strict msgpack. Dynamic (grabs every class defined in the schemas
+    package) so no type is missed; langchain message types stay covered by
+    LangGraph's own safe-type registry.
+    """
+    import importlib
+    import inspect
+    import pkgutil
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    import agent_core.schemas as _schemas
+
+    allow: list[type] = []
+    for mod_info in pkgutil.iter_modules(_schemas.__path__, _schemas.__name__ + "."):
+        mod = importlib.import_module(mod_info.name)
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if getattr(obj, "__module__", "") == mod_info.name:
+                allow.append(obj)
+    return JsonPlusSerializer(allowed_msgpack_modules=allow)
+
+
 async def worker_node(state: LeadState) -> dict:
     """Delegate the active PlanItem to the worker subgraph; return its digest."""
     item = _active_item(state)
@@ -58,7 +84,7 @@ async def worker_node(state: LeadState) -> dict:
 def build_lead_graph(checkpointer=None):
     """Compile the lead graph. Needs a checkpointer for interrupt/resume."""
     if checkpointer is None:
-        checkpointer = MemorySaver()
+        checkpointer = MemorySaver(serde=_lead_serde())
 
     builder = StateGraph(LeadState)
     builder.add_node("seed_plan", seed_plan)
