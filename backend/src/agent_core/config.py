@@ -106,13 +106,13 @@ class Settings(BaseSettings):
         ),
     )
     use_lead_graph: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Opt-in orchestrator-worker lead graph (P3): sessions build "
-            "seed_plan -> plan_step -> worker -> integrate instead of the "
-            "classic ReAct agent graph. Disabled by default — zero change to "
-            "the shipped agent until P4 flips the default and removes the old "
-            "path."
+            "Orchestrator-worker lead graph (P3/P4 soft cutover): sessions build "
+            "seed_plan -> plan_step -> worker -> integrate. Primary since the P4 "
+            "soft cutover. The classic ReAct agent graph is KEPT as a fallback — "
+            "set AGENT_USE_LEAD_GRAPH=false to revert to it. Legacy code is not "
+            "deleted yet; that lands once the lead graph has more real-world mileage."
         ),
     )
 

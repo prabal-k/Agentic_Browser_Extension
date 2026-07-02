@@ -81,3 +81,11 @@ class TestSendDoneLead:
             await ws_handler._send_done(MagicMock(), session, final_values)
         assert captured["success"] is False
         assert captured["steps_completed"] == 1
+
+
+class TestLeadGraphIsDefault:
+    def test_use_lead_graph_defaults_to_true(self):
+        # Soft cutover (P4): the lead graph is the primary path. Test the code
+        # default (env-independent) so an accidental revert is caught.
+        from agent_core.config import Settings
+        assert Settings.model_fields["use_lead_graph"].default is True
