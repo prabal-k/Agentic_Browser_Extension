@@ -1,0 +1,37 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	seed_plan(seed_plan)
+	plan_step(plan_step)
+	integrate(integrate)
+	ask_user(ask_user)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> seed_plan;
+	ask_user --> plan_step;
+	integrate --> plan_step;
+	plan_step -. &nbsp;finish&nbsp; .-> __end__;
+	plan_step -.-> ask_user;
+	plan_step -.-> worker\3a__start__;
+	seed_plan --> plan_step;
+	worker\3afinish_subgoal --> integrate;
+	subgraph worker
+	worker\3a__start__(<p>__start__</p>)
+	worker\3adecide_action(decide_action)
+	worker\3aexecute_action(execute_action)
+	worker\3aobserve(observe)
+	worker\3asmart_evaluate(smart_evaluate)
+	worker\3afinish_subgoal(finish_subgoal)
+	worker\3a__start__ --> worker\3adecide_action;
+	worker\3adecide_action --> worker\3aexecute_action;
+	worker\3aexecute_action --> worker\3aobserve;
+	worker\3aobserve --> worker\3asmart_evaluate;
+	worker\3asmart_evaluate -.-> worker\3adecide_action;
+	worker\3asmart_evaluate -.-> worker\3afinish_subgoal;
+	end
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
