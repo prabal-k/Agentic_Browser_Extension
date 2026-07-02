@@ -111,3 +111,32 @@ class TestPlanStep:
         state["delegations_used"] = 15
         out = plan_step(state)
         assert out["lead_decision"]["action"] == "finish"
+
+    def test_blocked_item_not_selected(self):
+        # Only item b remains; its dependency 'a' is not present/done -> not ready -> finish.
+        from agent_core.agent.lead_nodes import _next_ready, plan_step
+        from agent_core.schemas.orchestrator import PlanItem, WorkerRole
+        b = PlanItem(id="b", subgoal="s2", role=WorkerRole.EXTRACTOR,
+                     done_criteria="d", depends_on=["a"])
+        state = create_lead_state("g", "gpt-4o-mini")
+        state["plan"] = [b]
+        assert _next_ready([b]) is None
+        out = plan_step(state)
+        assert out["lead_decision"]["action"] == "finish"
+        assert out["active_item_id"] is None
+
+    def test_ready_item_chosen_over_blocked_one(self):
+        # c has an unmet dependency and appears first; b's dep 'a' is DONE.
+        # _next_ready must SKIP c and return b -> proves the depends_on check matters.
+        from agent_core.agent.lead_nodes import _next_ready
+        from agent_core.schemas.orchestrator import PlanItem, PlanItemStatus, WorkerRole
+        a = PlanItem(id="a", subgoal="s", role=WorkerRole.NAVIGATOR,
+                     done_criteria="d", status=PlanItemStatus.DONE)
+        b = PlanItem(id="b", subgoal="s2", role=WorkerRole.EXTRACTOR,
+                     done_criteria="d", depends_on=["a"])
+        c = PlanItem(id="c", subgoal="s3", role=WorkerRole.EXTRACTOR,
+                     done_criteria="d", depends_on=["zzz"])  # unmet dep
+        plan = [a, c, b]
+        ready = _next_ready(plan)
+        assert ready is not None
+        assert ready.id == "b"
