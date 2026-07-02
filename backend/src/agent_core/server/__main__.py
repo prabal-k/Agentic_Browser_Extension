@@ -39,17 +39,24 @@ def main():
     tracing = os.environ.get("LANGCHAIN_TRACING_V2", "false")
     project = os.environ.get("LANGCHAIN_PROJECT", "default")
 
+    # Auto-reload is OFF by default. reload=True watches the repo and, on any file
+    # change, restarts the worker — which WIPES the in-memory KeyVault, so API keys
+    # saved from the extension vanish and the agent silently falls back to Ollama.
+    # Opt in for dev with `--reload` or AGENT_RELOAD=true (keys will not persist).
+    reload = "--reload" in args or os.environ.get("AGENT_RELOAD", "").lower() in ("1", "true", "yes")
+
     print(f"Starting server at http://{host}:{port}")
     print(f"WebSocket endpoint: ws://{host}:{port}/ws")
     print(f"Health check: http://{host}:{port}/health")
     print(f"Ollama: {settings.ollama_base_url} ({settings.ollama_model})")
     print(f"LangSmith tracing: {tracing} (project: {project})")
+    print(f"Auto-reload: {reload}" + ("  (in-memory API keys are wiped on each reload!)" if reload else ""))
 
     uvicorn.run(
         "agent_core.server.app:app",
         host=host,
         port=port,
-        reload=True,
+        reload=reload,
         log_level="info",
     )
 
