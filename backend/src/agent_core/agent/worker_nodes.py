@@ -247,9 +247,10 @@ async def worker_decide(state: WorkerState) -> dict:
     # (e.g. re-navigating to the same URL) instead of finishing. If the last two
     # executed actions are already identical to this one, stop and fail the
     # subgoal rather than burning the whole action budget looping.
-    sig = (action.action_type.value, action.value)
+    sig = (action.action_type.value, action.value, action.element_id)
     recent = [
-        (e.get("action", {}).get("action_type"), e.get("action", {}).get("value"))
+        (e.get("action", {}).get("action_type"), e.get("action", {}).get("value"),
+         e.get("action", {}).get("element_id"))
         for e in state.get("action_history", [])[-2:]
     ]
     if len(recent) == 2 and all(r == sig for r in recent):
@@ -343,7 +344,7 @@ async def worker_execute(state: WorkerState) -> dict:
     history = list(state.get("action_history", []))
     history.append({
         "action": {"action_type": action.action_type.value, "value": action.value,
-                   "description": action.description},
+                   "element_id": action.element_id, "description": action.description},
         "result": {"status": result.status.value, "extracted_data": result.extracted_data},
     })
 

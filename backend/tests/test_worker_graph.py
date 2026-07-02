@@ -72,7 +72,8 @@ class TestWorkerGraph:
 
     @pytest.mark.asyncio
     async def test_budget_exhaustion_fails(self):
-        # LLM always clicks, never finishes → loop hits WORKER_ACTION_CAP.
+        # LLM clicks DIFFERENT elements each turn (varied, so the anti-loop guard
+        # does not fire), never finishes → loop hits WORKER_ACTION_CAP.
         graph = build_worker_graph(MemorySaver())
         state = create_worker_state(
             role=WorkerRole.NAVIGATOR, subgoal="never done",
@@ -80,7 +81,12 @@ class TestWorkerGraph:
         )
         with patch("agent_core.agent.worker_nodes.get_worker_llm") as gw:
             llm = AsyncMock()
-            llm.ainvoke.return_value = _tc("click", {"element_id": 1})
+            _ids = iter(range(1, 50))
+
+            def _varied_click(*args, **kwargs):
+                return _tc("click", {"element_id": next(_ids)})
+
+            llm.ainvoke.side_effect = _varied_click
             gw.return_value = llm
             resume = {"status": "success", "message": "ok", "page_changed": True}
             result = await graph.ainvoke(state, CFG)
