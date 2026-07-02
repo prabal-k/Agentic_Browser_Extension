@@ -12,10 +12,12 @@ import uuid
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from agent_core.agent.budgets import LEAD_DELEGATION_CAP
 from agent_core.agent.llm_client import get_reasoning_llm
 from agent_core.agent.nodes import _parse_llm_json
 from agent_core.schemas.orchestrator import (
     PlanItem,
+    PlanItemStatus,
     WorkerRole,
 )
 from agent_core.schemas.orchestrator_state import LeadState
@@ -85,3 +87,50 @@ async def seed_plan(state: LeadState) -> dict:
         items = _fallback_plan(goal)
     logger.info("seed_plan_done", item_count=len(items))
     return {"plan": items}
+
+
+def _active_item(state: LeadState) -> PlanItem | None:
+    active_id = state.get("active_item_id")
+    if not active_id:
+        return None
+    for item in state.get("plan", []):
+        if item.id == active_id:
+            return item
+    return None
+
+
+_TERMINAL = {PlanItemStatus.DONE, PlanItemStatus.FAILED, PlanItemStatus.SKIPPED}
+
+
+def _next_ready(plan: list[PlanItem]) -> PlanItem | None:
+    done_ids = {i.id for i in plan if i.status in {PlanItemStatus.DONE, PlanItemStatus.SKIPPED}}
+    for item in plan:
+        if item.status is PlanItemStatus.PENDING and all(d in done_ids for d in item.depends_on):
+            return item
+    return None
+
+
+def plan_step(state: LeadState) -> dict:
+    """Emit ONE coordination decision: delegate the next ready item, or finish.
+
+    Deterministic (0-LLM): the plan was model-seeded; execution order follows
+    dependencies. LLM-driven mid-run replanning is a later enhancement.
+    """
+    plan = list(state.get("plan", []))
+
+    if state.get("delegations_used", 0) >= LEAD_DELEGATION_CAP:
+        return {"lead_decision": {"action": "finish", "reason": "delegation cap reached"},
+                "active_item_id": None, "plan": plan}
+
+    ready = _next_ready(plan)
+    if ready is not None:
+        ready.status = PlanItemStatus.ACTIVE
+        return {"lead_decision": {"action": "delegate", "item_id": ready.id},
+                "active_item_id": ready.id, "plan": plan}
+
+    if all(i.status in _TERMINAL for i in plan):
+        return {"lead_decision": {"action": "finish"}, "active_item_id": None, "plan": plan}
+
+    # pending items remain but none are ready (unmet deps / blocked) → stop
+    return {"lead_decision": {"action": "finish", "reason": "no ready items (blocked)"},
+            "active_item_id": None, "plan": plan}

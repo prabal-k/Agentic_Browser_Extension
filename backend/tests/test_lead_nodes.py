@@ -64,3 +64,50 @@ class TestSeedPlan:
             from agent_core.agent.lead_nodes import seed_plan
             out = await seed_plan(state)
         assert out["plan"][0].role is WorkerRole.NAVIGATOR
+
+
+class TestPlanStep:
+    def _plan(self):
+        from agent_core.schemas.orchestrator import PlanItem, WorkerRole
+        a = PlanItem(id="a", subgoal="s1", role=WorkerRole.NAVIGATOR, done_criteria="d")
+        b = PlanItem(id="b", subgoal="s2", role=WorkerRole.EXTRACTOR, done_criteria="d",
+                     depends_on=["a"])
+        return [a, b]
+
+    def test_delegates_first_ready(self):
+        from agent_core.agent.lead_nodes import plan_step
+        from agent_core.schemas.orchestrator import PlanItemStatus
+        state = create_lead_state("g", "gpt-4o-mini")
+        state["plan"] = self._plan()
+        out = plan_step(state)
+        assert out["lead_decision"]["action"] == "delegate"
+        assert out["active_item_id"] == "a"
+        active = next(i for i in out["plan"] if i.id == "a")
+        assert active.status is PlanItemStatus.ACTIVE
+
+    def test_skips_item_with_unmet_dependency(self):
+        # a is pending (not done), so b (depends on a) is NOT ready — a is chosen.
+        from agent_core.agent.lead_nodes import plan_step
+        state = create_lead_state("g", "gpt-4o-mini")
+        state["plan"] = self._plan()
+        out = plan_step(state)
+        assert out["active_item_id"] == "a"
+
+    def test_finishes_when_all_done(self):
+        from agent_core.agent.lead_nodes import plan_step
+        from agent_core.schemas.orchestrator import PlanItemStatus
+        state = create_lead_state("g", "gpt-4o-mini")
+        plan = self._plan()
+        for i in plan:
+            i.status = PlanItemStatus.DONE
+        state["plan"] = plan
+        out = plan_step(state)
+        assert out["lead_decision"]["action"] == "finish"
+
+    def test_finishes_at_delegation_cap(self):
+        from agent_core.agent.lead_nodes import plan_step
+        state = create_lead_state("g", "gpt-4o-mini")
+        state["plan"] = self._plan()
+        state["delegations_used"] = 15
+        out = plan_step(state)
+        assert out["lead_decision"]["action"] == "finish"
