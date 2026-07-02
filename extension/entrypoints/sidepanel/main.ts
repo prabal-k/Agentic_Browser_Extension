@@ -87,6 +87,7 @@ async function submitKeys(): Promise<void> {
     // Clear key inputs immediately — keys should not linger in the DOM
     openaiKeyInput.value = '';
     groqKeyInput.value = '';
+    openrouterKeyInput.value = '';
 
     // Update provider status dots
     updateProviderStatus(data.providers);
@@ -620,6 +621,20 @@ chrome.runtime.onMessage.addListener((message) => {
 sendBtn.addEventListener('click', () => {
   const goal = goalInput.value.trim();
   if (!goal || !connected) return;
+
+  // Guard: don't send with an unsaved key, or a cloud provider that has no saved key.
+  const unsavedKey = openaiKeyInput.value.trim() || groqKeyInput.value.trim()
+    || openrouterKeyInput.value.trim();
+  const cloudProvider = ['openai', 'groq', 'openrouter'].includes(providerSelect.value);
+  if (unsavedKey) {
+    addMessage('error', 'You typed an API key but did not save it. Click "Save Keys" first, then send.');
+    return;
+  }
+  if (cloudProvider && !sessionToken) {
+    addMessage('error',
+      `Provider "${providerSelect.value}" needs a saved API key — enter it and click "Save Keys" first.`);
+    return;
+  }
 
   addMessage('user', goal);
   goalInput.value = '';
