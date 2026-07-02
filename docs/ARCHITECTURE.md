@@ -70,7 +70,7 @@ Three models are used, selected automatically per-action:
 
 | Model | Config Key | When Used | Latency |
 |---|---|---|---|
-| `qwen3.5:27b` | `AGENT_OLLAMA_MODEL` | First action, after findings, failed recovery, forced done | ~20-30s |
+| `qwen3.5:9b` | `AGENT_OLLAMA_MODEL` | First action, after findings, failed recovery, forced done | ~10-15s |
 | `qwen3.5:9b` | `AGENT_FAST_MODEL` | Simple actions: navigate, click, type, scroll | ~5-10s |
 | `qwen3-vl:8b` | `AGENT_VISION_MODEL` | visual_check tool (screenshot analysis) | ~15-20s |
 

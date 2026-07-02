@@ -94,7 +94,7 @@ All config lives in `backend/.env` (template at `backend/.env.example`). Key fie
 AGENT_OLLAMA_BASE_URL=http://localhost:11434
 
 # Models (names with "gpt" route to OpenAI)
-AGENT_OLLAMA_MODEL=qwen3.5:27b
+AGENT_OLLAMA_MODEL=qwen3.5:9b
 AGENT_FAST_MODEL=qwen3.5:9b
 AGENT_VISION_MODEL=qwen3-vl:8b
 
