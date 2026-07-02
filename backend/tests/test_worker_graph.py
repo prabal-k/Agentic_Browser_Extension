@@ -91,3 +91,18 @@ class TestWorkerGraph:
                 result = await graph.ainvoke(Command(resume=resume), CFG)
         assert result["result_digest"].status == "failed"
         assert result["result_digest"].actions_used == 8
+
+
+class TestWorkerGraphMountable:
+    def test_compiles_without_checkpointer(self):
+        # When mounted inside the lead graph, the worker must compile with no
+        # checkpointer of its own (it inherits the parent's).
+        graph = build_worker_graph(checkpointer=None)
+        assert graph is not None
+        assert graph.checkpointer is None
+
+    def test_explicit_checkpointer_still_used(self):
+        from langgraph.checkpoint.memory import MemorySaver
+        cp = MemorySaver()
+        graph = build_worker_graph(cp)
+        assert graph.checkpointer is cp

@@ -7,7 +7,6 @@ in P3; here it runs standalone (browser stubbed via Command(resume=...)).
 from typing import Literal
 
 import structlog
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from agent_core.agent.worker_nodes import (
@@ -35,10 +34,12 @@ def _route_after_execute(state: WorkerState) -> Literal["worker_decide", "finali
 
 
 def build_worker_graph(checkpointer=None):
-    """Compile the worker subgraph. Needs a checkpointer for interrupt/resume."""
-    if checkpointer is None:
-        checkpointer = MemorySaver()
+    """Compile the worker subgraph.
 
+    checkpointer=None compiles WITHOUT a checkpointer — required when mounting
+    this graph inside the lead graph (it inherits the lead's checkpointer).
+    Pass an explicit MemorySaver for standalone interrupt/resume (e.g. tests).
+    """
     builder = StateGraph(WorkerState)
     builder.add_node("worker_decide", worker_decide)
     builder.add_node("worker_execute", worker_execute)
