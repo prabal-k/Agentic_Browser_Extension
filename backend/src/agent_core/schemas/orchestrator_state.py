@@ -24,6 +24,7 @@ class LeadState(TypedDict, total=False):
     lead_decision: dict             # last plan_step output
     delegations_used: int           # lead-level cap (see budgets.LEAD_DELEGATION_CAP)
     tabs: dict[str, str]            # tab_id -> what's there ("gmail inbox")
+    last_page_context: PageContext | None
     stored_credentials: dict        # SECURITY: tracked separately (see spec §6)
     model_name: str
     api_keys: dict | None
@@ -55,6 +56,7 @@ def create_lead_state(
     model_name: str,
     api_keys: dict | None = None,
     prior_messages: list | None = None,
+    page_context: PageContext | None = None,
 ) -> LeadState:
     """Fresh lead state for a new task."""
     return LeadState(
@@ -64,6 +66,7 @@ def create_lead_state(
         lead_decision={},
         delegations_used=0,
         tabs={},
+        last_page_context=page_context,
         stored_credentials={},
         model_name=model_name,
         api_keys=api_keys,
