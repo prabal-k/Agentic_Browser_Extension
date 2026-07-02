@@ -143,3 +143,21 @@ class TestParseExecutionResult:
         result, page = _parse_execution_result(action, {"status": "failed", "message": "nope"})
         assert result.status == ActionStatus.FAILED
         assert page is None
+
+
+class TestBudget:
+    def test_budget_exhausted_true_at_cap(self):
+        from agent_core.agent.budgets import WORKER_ACTION_CAP
+        from agent_core.agent.worker_nodes import budget_exhausted
+        state = {"actions_used": WORKER_ACTION_CAP}
+        assert budget_exhausted(state) is True
+
+    def test_budget_not_exhausted_below_cap(self):
+        from agent_core.agent.worker_nodes import budget_exhausted
+        assert budget_exhausted({"actions_used": 0}) is False
+
+    def test_budget_digest_is_failed(self):
+        from agent_core.agent.worker_nodes import _digest_budget_exhausted
+        d = _digest_budget_exhausted({"actions_used": 8})
+        assert d.status == "failed"
+        assert d.actions_used == 8

@@ -11,8 +11,9 @@ import uuid
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.types import interrupt
 
-from agent_core.agent.budgets import is_destructive
+from agent_core.agent.budgets import WORKER_ACTION_CAP, is_destructive
 from agent_core.agent.llm_client import get_worker_llm
 from agent_core.schemas.actions import Action, ActionResult, ActionStatus, ActionType
 from agent_core.schemas.dom import PageContext
@@ -210,3 +211,53 @@ def _parse_execution_result(
         except Exception:  # noqa: BLE001 — malformed DOM shouldn't crash the worker
             page = None
     return result, page
+
+
+async def worker_execute(state: WorkerState) -> dict:
+    """Send the current action to the browser via interrupt(), record the result.
+
+    Uses the SAME execution_request/resume contract as execute_action_node so the
+    ws_handler/orchestrator browser side needs no change.
+    """
+    action = state["current_action"]
+    execution_request = {
+        "action_id": action.action_id,
+        "action_type": action.action_type.value,
+        "element_id": action.element_id,
+        "element_fingerprint": action.element_fingerprint,
+        "value": action.value,
+        "description": action.description,
+    }
+    execution_result = interrupt(execution_request)
+
+    result, new_page = _parse_execution_result(action, execution_result)
+
+    history = list(state.get("action_history", []))
+    history.append({
+        "action": {"action_type": action.action_type.value, "description": action.description},
+        "result": {"status": result.status.value, "extracted_data": result.extracted_data},
+    })
+
+    out: dict = {
+        "pending_result": result,
+        "action_history": history,
+        "actions_used": state.get("actions_used", 0) + 1,
+        "previous_page_context": state.get("page_context"),
+        "current_action": None,
+    }
+    if new_page is not None:
+        out["page_context"] = new_page
+    return out
+
+
+def budget_exhausted(state: WorkerState) -> bool:
+    """True when the worker has spent its per-subgoal action budget."""
+    return state.get("actions_used", 0) >= WORKER_ACTION_CAP
+
+
+def _digest_budget_exhausted(state: WorkerState) -> ResultDigest:
+    return ResultDigest(
+        status="failed",
+        summary=f"subgoal not completed within {WORKER_ACTION_CAP} actions",
+        actions_used=state.get("actions_used", 0),
+    )
