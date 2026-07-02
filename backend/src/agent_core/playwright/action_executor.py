@@ -17,6 +17,43 @@ from agent_core.schemas.dom import PageContext
 logger = structlog.get_logger("playwright.executor")
 
 
+def downscale_image_bytes(data: bytes, max_dim: int = 1280) -> bytes:
+    """Shrink an image so its longest side <= max_dim. Returns JPEG bytes.
+
+    Large screenshots (full-page Maps shots can be 1920x3000+) explode into
+    thousands of vision tokens, making inference slow and timeout-prone under
+    GPU contention. Downscaling keeps the answer quality while cutting tokens.
+    On any failure, returns the original bytes unchanged.
+    """
+    try:
+        import io
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as im:
+            im = im.convert("RGB")
+            if max(im.size) <= max_dim:
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=85)
+                return buf.getvalue()
+            im.thumbnail((max_dim, max_dim), Image.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG", quality=85)
+            return buf.getvalue()
+    except Exception as e:
+        logger.warning("downscale_failed", error=f"{type(e).__name__}: {e}")
+        return data
+
+
+def downscale_image_b64(b64: str, max_dim: int = 1280) -> str:
+    """Base64-in, base64-out variant of downscale_image_bytes."""
+    try:
+        raw = base64.b64decode(b64)
+        return base64.b64encode(downscale_image_bytes(raw, max_dim)).decode("utf-8")
+    except Exception as e:
+        logger.warning("downscale_b64_failed", error=f"{type(e).__name__}: {e}")
+        return b64
+
+
 async def _analyze_screenshot_with_vision(
     screenshot_bytes: bytes,
     query: str,
@@ -36,7 +73,7 @@ async def _analyze_screenshot_with_vision(
             return "Vision model not configured. Set AGENT_VISION_MODEL in .env."
 
         base_url = settings.ollama_base_url
-        img_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+        img_b64 = base64.b64encode(downscale_image_bytes(screenshot_bytes)).decode("utf-8")
 
         # The query comes from the agent's tool call description —
         # it carries the actual task context (e.g., "check for vape products")
@@ -57,9 +94,11 @@ async def _analyze_screenshot_with_vision(
                 "images": [img_b64],
             }],
             "stream": False,
+            "think": False,  # skip qwen3-vl <think> dump — wastes latency + tokens
+            "options": {"num_predict": 300},  # one-line answer needs no more
         }
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             resp = await client.post(f"{base_url}/api/chat", json=payload)
             resp.raise_for_status()
             data = resp.json()
@@ -69,8 +108,13 @@ async def _analyze_screenshot_with_vision(
         return result[:3000] if result else "Vision model returned empty response."
 
     except Exception as e:
-        logger.error("vision_analysis_error", error=str(e))
-        return f"Vision analysis failed: {str(e)[:200]}"
+        # httpx timeout/connect errors stringify to "" — include the type.
+        if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+            detail = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+        else:
+            detail = f"{type(e).__name__}: {e}".rstrip(": ")
+        logger.error("vision_analysis_error", error=detail, exc_type=type(e).__name__)
+        return f"Vision analysis failed: {detail[:200]}"
 
 
 def _find_element_selector(page_context: PageContext, element_id: int) -> str | None:

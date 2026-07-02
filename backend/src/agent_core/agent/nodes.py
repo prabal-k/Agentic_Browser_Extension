@@ -2329,11 +2329,36 @@ async def self_critique_action(state: AgentState) -> dict:
         goal = state.get("goal", Goal(original_text=""))
         template = detect_task_pattern(goal.original_text)
 
-        if ("__VISUAL_CHECK__" in last_value
+        is_image_task = template and template["name"] == "image_analysis"
+        is_visual_check = "__VISUAL_CHECK__" in last_value
+
+        # Vision FAILED (timeout/error). The screenshot action still reports
+        # status=success — only the server-side vision step failed, leaving a
+        # "Vision analysis failed: ..." marker in extracted_data. Without this
+        # branch that marker passes the >30-char gate below and the agent is told
+        # it "has the visual evidence" → it loops, re-screenshotting and freezing
+        # 120s on each ReadTimeout. Finish honestly instead, and forbid retry.
+        if (is_visual_check and is_image_task
+                and isinstance(extracted, str)
+                and extracted.startswith("Vision analysis failed")):
+            logger.info("visual_check_failed_auto_done",
+                        msg="Vision unavailable — finishing with honest fallback",
+                        detail=extracted[:120])
+            return {
+                "cognitive_status": CognitiveStatus.DECIDING,
+                "current_reasoning": (
+                    "STUCK: vision model unavailable (request timed out) — photos could NOT "
+                    "be analyzed. Do NOT retry visual_check or take_screenshot. Call done() NOW "
+                    "with ONE line: say images could not be analyzed, then give a best-effort "
+                    "guess from the business name/text only, marked UNCONFIRMED."
+                ),
+            }
+
+        if (is_visual_check
                 and last_status == "success"
                 and isinstance(extracted, str) and len(extracted) > 30
                 and not extracted.startswith("data:image")
-                and template and template["name"] == "image_analysis"):
+                and is_image_task):
             logger.info("visual_check_auto_done",
                         msg="Image analysis complete via visual_check — auto-finishing")
             return {
