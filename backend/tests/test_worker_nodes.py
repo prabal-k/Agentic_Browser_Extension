@@ -246,3 +246,27 @@ class TestBoundaryGuards:
         from agent_core.agent.worker_nodes import _build_worker_action
         a = _build_worker_action("click", {"element_id": True})
         assert a.element_id is None
+
+
+class TestWorkerDecideLLMErrorGuard:
+    @pytest.mark.asyncio
+    async def test_llm_error_returns_failed_digest_not_crash(self):
+        from unittest.mock import AsyncMock, patch
+
+        from agent_core.agent.worker_nodes import worker_decide
+        from agent_core.schemas.orchestrator import WorkerRole
+        from agent_core.schemas.orchestrator_state import create_worker_state
+        state = create_worker_state(
+            role=WorkerRole.EXTRACTOR, subgoal="read price",
+            done_criteria="captured", model_name="gpt-4o-mini",
+        )
+        state["actions_used"] = 2
+        with patch("agent_core.agent.worker_nodes.get_worker_llm") as gw:
+            llm = AsyncMock()
+            llm.ainvoke.side_effect = RuntimeError("401 invalid api key")
+            gw.return_value = llm
+            out = await worker_decide(state)
+        assert out["finished"] is True
+        assert out["result_digest"].status == "failed"
+        assert out["result_digest"].actions_used == 2
+        assert "error" in out["result_digest"].summary.lower()

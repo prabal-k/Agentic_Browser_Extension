@@ -157,11 +157,6 @@ def _format_observations(action_history: list, limit: int = 5) -> str:
 
 async def worker_decide(state: WorkerState) -> dict:
     """One role-scoped LLM call → the next Action, or a terminal digest."""
-    llm = get_worker_llm(
-        role=state["role"],
-        model_name=state["model_name"],
-        api_keys=state.get("api_keys"),
-    )
     system = _WORKER_SYSTEM.format(
         subgoal=state["subgoal"], done_criteria=state["done_criteria"],
     )
@@ -171,10 +166,26 @@ async def worker_decide(state: WorkerState) -> dict:
         f"{_format_observations(state.get('action_history', []))}"
     )
 
-    response = await llm.ainvoke([
-        SystemMessage(content=system),
-        HumanMessage(content=human),
-    ])
+    try:
+        llm = get_worker_llm(
+            role=state["role"],
+            model_name=state["model_name"],
+            api_keys=state.get("api_keys"),
+        )
+        response = await llm.ainvoke([
+            SystemMessage(content=system),
+            HumanMessage(content=human),
+        ])
+    except Exception as exc:  # noqa: BLE001 — a transient LLM error must not crash the run
+        logger.warning("worker_decide_llm_error", error=str(exc)[:200])
+        return {
+            "finished": True,
+            "result_digest": ResultDigest(
+                status="failed",
+                summary=f"worker LLM error: {str(exc)[:120]}",
+                actions_used=state.get("actions_used", 0),
+            ),
+        }
 
     if not getattr(response, "tool_calls", None):
         # No tool call — treat as inability to proceed; end gracefully.
