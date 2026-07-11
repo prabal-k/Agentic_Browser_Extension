@@ -28,7 +28,7 @@ ROLE_TOOL_NAMES: dict[WorkerRole, list[str]] = {
         "upload_file",
         "press_key",
     ],
-    WorkerRole.VERIFIER: ["read", "see", "finish_subgoal"],
+    WorkerRole.VERIFIER: ["read", "see"],
     WorkerRole.AUTH: [
         "navigate",
         "fill_form",
@@ -55,8 +55,17 @@ def resolve_role_tools(role: WorkerRole) -> list[BaseTool]:
     that has no registered object — this is the drift guard: a typo in
     ROLE_TOOL_NAMES fails loudly instead of silently binding nothing.
     """
+    # finish_subgoal is UNIVERSAL: every worker must be able to end its subgoal.
+    # Without it a role can only loop until the anti-loop guard or action budget
+    # forces a FAILED digest — it can never report success (this silently failed
+    # every non-verifier subgoal and threw away the answer the worker had found).
+    # Append it here (deduped) so completion is always reachable for all roles.
+    names = list(ROLE_TOOL_NAMES[role])
+    if "finish_subgoal" not in names:
+        names.append("finish_subgoal")
+
     resolved: list[BaseTool] = []
-    for name in ROLE_TOOL_NAMES[role]:
+    for name in names:
         try:
             resolved.append(WORKER_TOOL_OBJECTS[name])
         except KeyError as exc:

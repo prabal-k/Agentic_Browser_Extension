@@ -60,6 +60,15 @@ def detect_provider(model_name: str) -> LLMProvider:
     if any(pattern in name_lower for pattern in openai_patterns):
         return LLMProvider.OPENAI
 
+    # Ollama models use a "name:tag" convention (e.g. "deepseek-r1:32b",
+    # "qwen2.5:32b-instruct"). A bare colon tag is the Ollama signature and must
+    # win over the Groq name-substring patterns below — otherwise "deepseek-r1:32b"
+    # (a LOCAL Ollama model) misroutes to Groq on the "deepseek-" substring. Cloud
+    # Groq/OpenAI ids never carry a colon tag ("deepseek-r1-distill-llama-70b").
+    # (":free" already returned OpenRouter above, so it can't reach here.)
+    if ":" in name_lower:
+        return LLMProvider.OLLAMA
+
     if any(pattern in name_lower for pattern in GROQ_PATTERNS):
         return LLMProvider.GROQ
 

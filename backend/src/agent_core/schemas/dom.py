@@ -164,7 +164,7 @@ class DOMElement(BaseModel):
 
         if self.text:
             # Truncate text aggressively — 50 chars is enough for identification
-            display_text = self.text[:50] + ".." if len(self.text) > 50 else self.text
+            display_text = self.text[:50] + "..." if len(self.text) > 50 else self.text
             # Clean whitespace
             display_text = " ".join(display_text.split())
             parts.append(f'"{display_text}"')
@@ -186,7 +186,8 @@ class DOMElement(BaseModel):
                 from urllib.parse import urlparse
                 path = urlparse(href).path
                 if path and path != "/":
-                    parts.append(f'href="{path[:40]}"')
+                    shown = path[:40] + "..." if len(path) > 40 else path
+                    parts.append(f'href="{shown}"')
             elif len(href) <= 40:
                 parts.append(f'href="{href}"')
 
@@ -195,6 +196,8 @@ class DOMElement(BaseModel):
             parts.append("*focused")
         if not self.is_enabled:
             parts.append("*disabled")
+        if not self.is_visible:
+            parts.append("*hidden")
 
         # Container tag — helps LLM distinguish wrappers from leaf elements
         if not self.is_leaf and self.children_count > 0:

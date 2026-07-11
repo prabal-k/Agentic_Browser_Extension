@@ -276,6 +276,11 @@ async def run_interactive(
     """
     graph = create_agent_graph()
 
+    # SECURITY: mask secrets before any run uploads to LangSmith (keys ride in
+    # the graph state, which LangGraph traces). No-op when tracing is off.
+    from agent_core.observability import install_trace_redaction
+    install_trace_redaction()
+
     initial_state = create_initial_state(
         goal_text=goal,
         page_context=page_context,

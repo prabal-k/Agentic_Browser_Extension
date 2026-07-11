@@ -18,6 +18,7 @@ from pydantic import BaseModel, SecretStr
 
 from agent_core.config import settings
 from agent_core.logging import setup_logging
+from agent_core.observability import install_trace_redaction
 from agent_core.server.session import SessionManager
 from agent_core.server.key_vault import key_vault, ProviderKeys
 from agent_core.server.ws_handler import handle_websocket
@@ -47,6 +48,12 @@ class KeySubmissionResponse(BaseModel):
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     setup_logging()
+
+    # SECURITY: mask API keys before any run is uploaded to LangSmith. The
+    # agent carries the user's keys in the graph state (LeadState.api_keys),
+    # and LangGraph traces the full node state — so without this the raw
+    # openai_api_key leaks into every trace. Runs before the first graph exec.
+    install_trace_redaction()
 
     app = FastAPI(
         title="Agentic Browser Extension — Backend",

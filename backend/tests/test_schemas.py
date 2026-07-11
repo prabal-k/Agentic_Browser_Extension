@@ -95,16 +95,16 @@ class TestDOMElement:
 
     def test_llm_representation_button(self, sample_button):
         repr_str = sample_button.to_llm_representation()
+        # Compact format: "[1] btn "Add to Cart" aria=... [form: ...]". Defaults
+        # (visible/enabled) are implicit — only exceptions (*disabled/*hidden) show.
         assert "[1]" in repr_str
-        assert "button" in repr_str
+        assert "btn" in repr_str
         assert "Add to Cart" in repr_str
-        assert "visible" in repr_str
-        assert "enabled" in repr_str
 
     def test_llm_representation_input(self, sample_input):
         repr_str = sample_input.to_llm_representation()
         assert "[2]" in repr_str
-        assert "text_input" in repr_str
+        assert "input" in repr_str
         assert "Search products..." in repr_str
 
     def test_llm_representation_disabled(self, disabled_button):
@@ -161,14 +161,13 @@ class TestPageContext:
 
     def test_llm_representation(self, sample_page_context):
         repr_str = sample_page_context.to_llm_representation()
-        assert "Current Page" in repr_str
         assert "example-shop.com" in repr_str
-        assert "Interactive Elements" in repr_str
+        assert "Elements" in repr_str
         assert "Add to Cart" in repr_str
 
     def test_llm_representation_empty_page(self, empty_page_context):
         repr_str = empty_page_context.to_llm_representation()
-        assert "no interactive elements found" in repr_str
+        assert "no interactive elements" in repr_str
 
     def test_page_context_from_json_fixture(self):
         """Load a real DOM snapshot fixture and validate."""
@@ -246,8 +245,14 @@ class TestAction:
             )
 
     def test_all_action_types_exist(self):
-        """Verify all expected action types are defined."""
-        expected = {
+        """Verify the core action types remain defined (superset-safe).
+
+        The enum has since grown browser-control actions (drag, evaluate_js,
+        upload_file, wait_for_*, get_*_log, handle_dialog). Assert the core
+        contract is a SUBSET of the enum so adding new actions never breaks this,
+        while removing a core one still fails loudly.
+        """
+        core = {
             "click", "type_text", "clear_and_type", "select_option",
             "check", "uncheck", "hover", "navigate", "go_back",
             "go_forward", "refresh", "scroll_down", "scroll_up",
@@ -257,7 +262,7 @@ class TestAction:
             "wait", "done",
         }
         actual = {at.value for at in ActionType}
-        assert expected == actual
+        assert core <= actual, f"missing core action types: {core - actual}"
 
     def test_action_serialization_roundtrip(self, sample_click_action):
         data = sample_click_action.model_dump()
@@ -594,7 +599,7 @@ class TestEdgeCases:
         )
         assert len(page.elements) == 500
         repr_str = page.to_llm_representation()
-        assert "500 available" in repr_str
+        assert "Elements (500)" in repr_str
 
     def test_element_with_empty_text(self):
         element = DOMElement(
@@ -605,7 +610,7 @@ class TestEdgeCases:
             attributes={"aria-label": "Close dialog"},
         )
         repr_str = element.to_llm_representation()
-        assert "aria-label" in repr_str
+        assert "aria" in repr_str  # compact repr renders aria-label as aria="..."
         assert "Close dialog" in repr_str
 
     def test_element_with_very_long_href(self):

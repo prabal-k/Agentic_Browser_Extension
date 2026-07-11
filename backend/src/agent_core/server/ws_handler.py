@@ -11,6 +11,8 @@ with the WebSocket via asyncio primitives.
 """
 
 import asyncio
+import contextlib
+import os
 import time
 import uuid
 from typing import Any
@@ -396,11 +398,42 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
                    message=f"Working on: {goal}",
                    session_id=session.session_id)
 
+    # Group every interrupt/resume round-trip of THIS goal under ONE LangSmith
+    # trace. Each graph.astream() below is otherwise its own root run, so a task
+    # with N human-in-the-loop resumes renders as N sibling "agent_<sid>" traces
+    # (the "multiple tracings for the same agent" the dashboard showed). A single
+    # parent run wrapping the loop nests them into one. No-op (nullcontext) when
+    # tracing is disabled, so non-traced runs pay nothing.
+    _truthy = ("1", "true", "yes", "on")
+    _tracing_on = (
+        os.environ.get("LANGCHAIN_TRACING_V2", "").lower() in _truthy
+        or os.environ.get("LANGSMITH_TRACING", "").lower() in _truthy
+    )
+    if _tracing_on:
+        from langsmith import trace as _ls_trace
+        parent_cm = _ls_trace(
+            name=f"agent_{session.session_id}",
+            run_type="chain",
+            inputs={"goal": goal, "model": model_name},
+            metadata={"session_id": session.session_id, "thread_id": session.thread_id},
+            tags=["agent", "goal"],
+        )
+    else:
+        parent_cm = contextlib.nullcontext()
+
     # Run the agent graph with interrupt handling
     current_input = initial_state
+    turn = 0
+    parent_run = parent_cm.__enter__()
 
     try:
         while session.is_running:
+            # Name each round-trip so the children read clearly under the parent:
+            # first pass = the goal run, each subsequent resume = resume_N.
+            config["run_name"] = (
+                f"agent_{session.session_id}" if turn == 0 else f"resume_{turn}"
+            )
+            turn += 1
             try:
                 # Stream graph execution with pre-node status updates
                 async for event in session.graph.astream(current_input, config=config, stream_mode="updates"):
@@ -452,6 +485,17 @@ async def _handle_goal(ws: WebSocket, session: Session, raw: dict) -> None:
                            recoverable=False)
         except Exception:
             pass
+
+    finally:
+        # Close the LangSmith parent run (records turn/action counts). Runs even
+        # on the WebSocketDisconnect early return. Suppress everything —
+        # observability must never change the task outcome.
+        with contextlib.suppress(Exception):
+            if parent_run is not None:
+                parent_run.add_outputs(
+                    {"turns": turn, "total_actions": session.action_count}
+                )
+            parent_cm.__exit__(None, None, None)
 
     # Send final done message
     if session.is_running:

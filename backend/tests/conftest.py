@@ -1,5 +1,15 @@
 """Shared test fixtures for the agentic browser extension backend."""
 
+import os
+
+# Tests must NEVER emit LangSmith traces. pytest inherits the ambient shell env,
+# so if LANGCHAIN_TRACING_V2 is on, every graph.ainvoke() in a test dumps a flat,
+# ungrouped "LangGraph" run into the project (recognizable by test fixtures like
+# done_criteria="impossible"/"captured"). Force tracing off before any langchain
+# module initializes its callbacks. Real app runs (server) are unaffected.
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ["LANGSMITH_TRACING"] = "false"
+
 import pytest
 import json
 from pathlib import Path

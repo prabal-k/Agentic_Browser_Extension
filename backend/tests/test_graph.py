@@ -108,22 +108,23 @@ class TestRouteAfterCritique:
         )
         assert route_after_critique(state) == "create_plan"
 
-    def test_routes_to_reason_when_ok(self):
+    def test_proceeds_to_action_when_ok(self):
+        # Not re-planning → the reason node is skipped by design; go to decide_action.
         state = AgentState(
             goal=Goal(original_text="test"),
             plan=Plan(plan_version=1),
             cognitive_status=CognitiveStatus.REASONING,
         )
-        assert route_after_critique(state) == "reason"
+        assert route_after_critique(state) == "decide_action"
 
-    def test_stops_replanning_after_3_versions(self):
+    def test_stops_replanning_at_cap(self):
+        # Re-plan cap is plan_version >= 4: proceed to action instead of looping.
         state = AgentState(
             goal=Goal(original_text="test"),
-            plan=Plan(plan_version=3),
+            plan=Plan(plan_version=4),
             cognitive_status=CognitiveStatus.RE_PLANNING,
         )
-        # Should proceed to reason, not re-plan again
-        assert route_after_critique(state) == "reason"
+        assert route_after_critique(state) == "decide_action"
 
 
 class TestRouteAfterReasoning:
@@ -213,12 +214,13 @@ class TestRouteAfterSelfCritique:
         )
         assert route_after_self_critique(state) == "handle_retry"
 
-    def test_routes_to_finalize_on_complete(self):
+    def test_routes_to_verify_on_complete(self):
+        # On COMPLETED, don't finalize blindly — verify the goal first.
         state = AgentState(
             goal=Goal(original_text="test"),
             cognitive_status=CognitiveStatus.COMPLETED,
         )
-        assert route_after_self_critique(state) == "finalize"
+        assert route_after_self_critique(state) == "verify_goal"
 
     def test_routes_to_finalize_on_failure(self):
         state = AgentState(
@@ -371,7 +373,8 @@ class TestPromptFormatting:
         assert "{page_context}" in PLAN_CREATION_PROMPT
 
         assert "{goal}" in REASONING_PROMPT
-        assert "{plan}" in REASONING_PROMPT
+        # REASONING_PROMPT now references the current step directly (not the whole {plan}).
+        assert "{current_step_number}" in REASONING_PROMPT
         assert "{page_context}" in REASONING_PROMPT
         assert "{retry_context}" in REASONING_PROMPT
 
@@ -571,7 +574,10 @@ class TestSelfCritiqueActionNode:
     """Test self_critique_action node."""
 
     @pytest.mark.asyncio
-    async def test_completes_when_all_steps_done(self):
+    async def test_no_findings_routes_direct_to_action(self):
+        # Reactive architecture: self_critique no longer completes on step-index.
+        # With no critique findings it goes straight to DECIDING; completion happens
+        # only when the LLM explicitly calls done().
         from agent_core.agent.nodes import self_critique_action
 
         state = AgentState(
@@ -585,7 +591,7 @@ class TestSelfCritiqueActionNode:
         )
 
         result = await self_critique_action(state)
-        assert result["cognitive_status"] == CognitiveStatus.COMPLETED
+        assert result["cognitive_status"] == CognitiveStatus.DECIDING
 
     @pytest.mark.asyncio
     async def test_routes_to_retry_on_failure(self):
