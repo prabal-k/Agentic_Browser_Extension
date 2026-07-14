@@ -14,7 +14,8 @@ class TestResolveRoleTools:
     def test_navigator_resolves_all_names_plus_finish(self):
         tools = resolve_role_tools(WorkerRole.NAVIGATOR)
         assert [t.name for t in tools] == [
-            "navigate", "click", "scroll_down", "wait", "go_back", "finish_subgoal",
+            "navigate", "click", "scroll_down", "wait", "go_back",
+            "fill_form", "press_key", "finish_subgoal",
         ]
 
     def test_every_role_can_finish(self):

@@ -19,7 +19,16 @@ from agent_core.tools.consolidated_tools import WORKER_TOOL_OBJECTS
 MAX_TOOLS_PER_ROLE: int = 8
 
 ROLE_TOOL_NAMES: dict[WorkerRole, list[str]] = {
-    WorkerRole.NAVIGATOR: ["navigate", "click", "scroll_down", "wait", "go_back"],
+    # fill_form + press_key give the navigator a way to TYPE. Searching ("go to
+    # the results for X") is a navigation task, but without a typing tool the
+    # navigator can only click the search box — it enters the query nowhere,
+    # re-decides, clicks again, and loops until the anti-loop guard forces a
+    # false failure. fill_form(fields, submit=True) types the query and submits;
+    # press_key handles a bare Enter. (7 tools + finish_subgoal = the 8 cap.)
+    WorkerRole.NAVIGATOR: [
+        "navigate", "click", "scroll_down", "wait", "go_back",
+        "fill_form", "press_key",
+    ],
     WorkerRole.EXTRACTOR: ["read", "see", "extract_table"],
     WorkerRole.FORM_FILLER: [
         "fill_form",
